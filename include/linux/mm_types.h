@@ -472,6 +472,11 @@ struct vm_area_struct {
 	 * containing the name given to the vma, or NULL if unnamed.
 	 */
 
+#ifdef CONFIG_PER_VMA_LOCK
+	int vm_lock_seq;
+	struct rw_semaphore lock;
+#endif
+
 	union {
 		struct {
 			struct rb_node rb;
@@ -591,6 +596,9 @@ struct mm_struct {
 					  * init_mm.mmlist, and are protected
 					  * by mmlist_lock
 					  */
+#ifdef CONFIG_PER_VMA_LOCK
+		int mm_lock_seq;
+#endif
 
 
 		unsigned long hiwater_rss; /* High-watermark of RSS usage */
