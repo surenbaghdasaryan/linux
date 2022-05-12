@@ -5183,6 +5183,51 @@ vm_fault_t handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 }
 EXPORT_SYMBOL_GPL(handle_mm_fault);
 
+#ifdef CONFIG_PER_VMA_LOCK
+static inline struct vm_area_struct *find_vma_under_rcu(struct mm_struct *mm,
+							unsigned long address)
+{
+	struct vm_area_struct *vma = __find_vma(mm, address);
+
+	if (!vma || vma->vm_start > address)
+		return NULL;
+
+	if (!vma_is_anonymous(vma))
+		return NULL;
+
+	if (!vma_read_trylock(vma)) {
+		count_vm_vma_lock_event(VMA_LOCK_ABORT);
+		return NULL;
+	}
+
+	/* Check if the VMA got isolated after we found it */
+	if (RB_EMPTY_NODE(&vma->vm_rb)) {
+		vma_read_unlock(vma);
+		count_vm_vma_lock_event(VMA_LOCK_MISS);
+		return NULL;
+	}
+
+	return vma;
+}
+
+/*
+ * Lookup and lock and anonymous VMA. Returned VMA is guaranteed to be stable
+ * and not isolated. If the VMA is not found of is being modified the function
+ * returns NULL.
+ */
+struct vm_area_struct *find_and_lock_anon_vma(struct mm_struct *mm,
+					      unsigned long address)
+{
+	struct vm_area_struct *vma;
+
+	rcu_read_lock();
+	vma = find_vma_under_rcu(mm, address);
+	rcu_read_unlock();
+
+	return vma;
+}
+#endif /* CONFIG_PER_VMA_LOCK */
+
 #ifndef __PAGETABLE_P4D_FOLDED
 /*
  * Allocate p4d page table.
