@@ -1818,6 +1818,7 @@ unmap_writable:
 out:
 	perf_event_mmap(vma);
 
+	vma_mark_locked(vma);
 	vm_stat_account(mm, vm_flags, len >> PAGE_SHIFT);
 	if (vm_flags & VM_LOCKED) {
 		if ((vm_flags & VM_SPECIAL) || vma_is_dax(vma) ||

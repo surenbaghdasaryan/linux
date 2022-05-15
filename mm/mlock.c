@@ -380,6 +380,7 @@ static void mlock_vma_pages_range(struct vm_area_struct *vma,
 	 */
 	if (newflags & VM_LOCKED)
 		newflags |= VM_IO;
+	vma_mark_locked(vma);
 	WRITE_ONCE(vma->vm_flags, newflags);
 
 	lru_add_drain();
@@ -456,6 +457,7 @@ success:
 
 	if ((newflags & VM_LOCKED) && (oldflags & VM_LOCKED)) {
 		/* No work to do, and mlocking twice would be wrong */
+		vma_mark_locked(vma);
 		vma->vm_flags = newflags;
 	} else {
 		mlock_vma_pages_range(vma, start, end, newflags);
