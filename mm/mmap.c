@@ -3538,6 +3538,7 @@ static void vm_lock_mapping(struct mm_struct *mm, struct address_space *mapping)
  *     hugetlb mapping);
  *   - all i_mmap_rwsem locks;
  *   - all anon_vma->rwseml
+ *   - all vmas marked locked
  *
  * We can take all locks within these types randomly because the VM code
  * doesn't nest them and we protected from parallel mm_take_all_locks() by
@@ -3579,6 +3580,7 @@ int mm_take_all_locks(struct mm_struct *mm)
 		if (vma->anon_vma)
 			list_for_each_entry(avc, &vma->anon_vma_chain, same_vma)
 				vm_lock_anon_vma(mm, avc->anon_vma);
+		vma_mark_locked(vma);
 	}
 
 	return 0;
@@ -3636,6 +3638,7 @@ void mm_drop_all_locks(struct mm_struct *mm)
 	mmap_assert_write_locked(mm);
 	BUG_ON(!mutex_is_locked(&mm_all_locks_mutex));
 
+	vma_mark_unlocked_all(mm);
 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
 		if (vma->anon_vma)
 			list_for_each_entry(avc, &vma->anon_vma_chain, same_vma)
