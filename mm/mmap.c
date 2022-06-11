@@ -1147,10 +1147,17 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
 	if (vm_flags & VM_SPECIAL)
 		return NULL;
 
+	if (prev)
+		vma_mark_locked(prev);
 	next = vma_next(mm, prev);
 	area = next;
-	if (area && area->vm_end == end)		/* cases 6, 7, 8 */
+	if (area)
+		vma_mark_locked(area);
+	if (area && area->vm_end == end) {		/* cases 6, 7, 8 */
 		next = next->vm_next;
+		if (next)
+			vma_mark_locked(next);
+	}
 
 	/* verify some invariant that must be enforced by the caller */
 	VM_WARN_ON(prev && addr <= prev->vm_start);
@@ -2687,6 +2694,7 @@ int __split_vma(struct mm_struct *mm, struct vm_area_struct *vma,
 	struct vm_area_struct *new;
 	int err;
 
+	vma_mark_locked(vma);
 	if (vma->vm_ops && vma->vm_ops->may_split) {
 		err = vma->vm_ops->may_split(vma, addr);
 		if (err)
