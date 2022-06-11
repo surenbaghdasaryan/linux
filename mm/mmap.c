@@ -1018,10 +1018,17 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
 	if (vm_flags & VM_SPECIAL)
 		return NULL;
 
+	if (prev)
+		vma_write_lock(prev);
 	next = find_vma(mm, prev ? prev->vm_end : 0);
 	mid = next;
-	if (next && next->vm_end == end)		/* cases 6, 7, 8 */
+	if (next)
+		vma_write_lock(next);
+	if (next && next->vm_end == end) {		/* cases 6, 7, 8 */
 		next = find_vma(mm, next->vm_end);
+		if (next)
+			vma_write_lock(next);
+	}
 
 	/* verify some invariant that must be enforced by the caller */
 	VM_WARN_ON(prev && addr <= prev->vm_start);
@@ -2202,6 +2209,7 @@ int __split_vma(struct mm_struct *mm, struct vm_area_struct *vma,
 	int err;
 	validate_mm_mt(mm);
 
+	vma_write_lock(vma);
 	if (vma->vm_ops && vma->vm_ops->may_split) {
 		err = vma->vm_ops->may_split(vma, addr);
 		if (err)
@@ -2568,6 +2576,8 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 
 	/* Attempt to expand an old mapping */
 	/* Check next */
+	if (next)
+		vma_write_lock(next);
 	if (next && next->vm_start == end && !vma_policy(next) &&
 	    can_vma_merge_before(next, vm_flags, NULL, file, pgoff+pglen,
 				 NULL_VM_UFFD_CTX, NULL)) {
@@ -2577,6 +2587,8 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 	}
 
 	/* Check prev */
+	if (prev)
+		vma_write_lock(prev);
 	if (prev && prev->vm_end == addr && !vma_policy(prev) &&
 	    (vma ? can_vma_merge_after(prev, vm_flags, vma->anon_vma, file,
 				       pgoff, vma->vm_userfaultfd_ctx, NULL) :
@@ -3039,6 +3051,8 @@ int vm_brk_flags(unsigned long addr, unsigned long request, unsigned long flags)
 		goto munmap_failed;
 
 	vma = mas_prev(&mas, 0);
+	if (vma)
+		vma_write_lock(vma);
 	if (!vma || vma->vm_end != addr || vma_policy(vma) ||
 	    !can_vma_merge_after(vma, flags, NULL, NULL,
 				 addr >> PAGE_SHIFT, NULL_VM_UFFD_CTX, NULL))
