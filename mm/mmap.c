@@ -2680,10 +2680,14 @@ detach_vmas_to_be_unmapped(struct mm_struct *mm, struct vm_area_struct *vma,
 	 * VM_GROWSUP VMA. Such VMAs can change their size under
 	 * down_read(mmap_lock) and collide with the VMA we are about to unmap.
 	 */
-	if (vma && (vma->vm_flags & VM_GROWSDOWN))
+	if (vma && (vma->vm_flags & VM_GROWSDOWN)) {
+		vma_mark_locked(vma);
 		return false;
-	if (prev && (prev->vm_flags & VM_GROWSUP))
+	}
+	if (prev && (prev->vm_flags & VM_GROWSUP)) {
+		vma_mark_locked(prev);
 		return false;
+	}
 	return true;
 }
 
