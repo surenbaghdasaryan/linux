@@ -17,6 +17,7 @@
 #include <linux/types.h>
 #include <linux/workqueue.h>
 #include <linux/percpu-refcount.h>
+#include <linux/dynamic_fault.h>
 
 
 /*
@@ -457,7 +458,7 @@ static_assert(PAGE_SHIFT <= 20);
 	void *_res;							\
 	DEFINE_ALLOC_TAG(_alloc_tag, _old);				\
 									\
-	_res = _do_alloc;						\
+	_res = !memory_fault() ? _do_alloc : NULL;			\
 	alloc_tag_restore(&_alloc_tag, _old);				\
 	_res;								\
 })
@@ -485,7 +486,7 @@ void kmem_cache_free(struct kmem_cache *s, void *objp);
         int _res;                                                       \
         DEFINE_ALLOC_TAG(_alloc_tag, _old);                             \
                                                                         \
-        _res = _do_alloc;                         			\
+        _res = !memory_fault() ? _do_alloc : 0;                         \
         alloc_tag_restore(&_alloc_tag, _old);                           \
         _res;                                                           \
 })
