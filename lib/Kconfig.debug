@@ -989,6 +989,7 @@ config ALLOC_TAGGING
 	default n
 	select CODE_TAGGING
 	select LAZY_PERCPU_COUNTER
+	select PAGE_EXTENSION
 	help
 	  Track allocation source code and record total allocation size
 	  initiated at that code location. The mechanism can be used to track
