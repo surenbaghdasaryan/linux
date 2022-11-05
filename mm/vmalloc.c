@@ -2491,7 +2491,7 @@ static struct vm_struct *__get_vm_area_node(unsigned long size,
 		align = 1ul << clamp_t(int, get_count_order_long(size),
 				       PAGE_SHIFT, IOREMAP_MAX_ORDER);
 
-	area = _kmalloc_node(sizeof(*area), (gfp_mask & GFP_RECLAIM_MASK)|__GFP_ZERO, node);
+	area = kmalloc_node(sizeof(*area), (gfp_mask & GFP_RECLAIM_MASK)|__GFP_ZERO, node);
 	if (unlikely(!area))
 		return NULL;
 
@@ -3026,7 +3026,7 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 		area->pages = __vmalloc_node(array_size, 1, nested_gfp, node,
 					area->caller);
 	} else {
-		area->pages = kmalloc_node(array_size, nested_gfp, node);
+		area->pages = _kmalloc_node(array_size, nested_gfp, node);
 	}
 
 	if (!area->pages) {
@@ -3098,7 +3098,7 @@ fail:
 }
 
 /**
- * __vmalloc_node_range - allocate virtually contiguous memory
+ * _vmalloc_node_range - allocate virtually contiguous memory
  * @size:		  allocation size
  * @align:		  desired alignment
  * @start:		  vm area range start
@@ -3125,7 +3125,7 @@ fail:
  *
  * Return: the address of the area or %NULL on failure
  */
-void *__vmalloc_node_range(unsigned long size, unsigned long align,
+void *_vmalloc_node_range(unsigned long size, unsigned long align,
 			unsigned long start, unsigned long end, gfp_t gfp_mask,
 			pgprot_t prot, unsigned long vm_flags, int node,
 			const void *caller)
@@ -3272,11 +3272,11 @@ fail:
  *
  * Return: pointer to the allocated memory or %NULL on error
  */
-void *__vmalloc_node(unsigned long size, unsigned long align,
+void *_vmalloc_node2(unsigned long size, unsigned long align,
 			    gfp_t gfp_mask, int node, const void *caller)
 {
-	return __vmalloc_node_range(size, align, VMALLOC_START, VMALLOC_END,
-				gfp_mask, PAGE_KERNEL, 0, node, caller);
+	return _vmalloc_node_range(size, align, VMALLOC_START, VMALLOC_END,
+				   gfp_mask, PAGE_KERNEL, 0, node, caller);
 }
 /*
  * This is only for performance analysis of vmalloc and stress purpose.
@@ -3284,15 +3284,15 @@ void *__vmalloc_node(unsigned long size, unsigned long align,
  * than that.
  */
 #ifdef CONFIG_TEST_VMALLOC_MODULE
-EXPORT_SYMBOL_GPL(__vmalloc_node);
+EXPORT_SYMBOL_GPL(_vmalloc_node2);
 #endif
 
-void *__vmalloc(unsigned long size, gfp_t gfp_mask)
+void *_vmalloc2(unsigned long size, gfp_t gfp_mask)
 {
-	return __vmalloc_node(size, 1, gfp_mask, NUMA_NO_NODE,
+	return _vmalloc_node2(size, 1, gfp_mask, NUMA_NO_NODE,
 				__builtin_return_address(0));
 }
-EXPORT_SYMBOL(__vmalloc);
+EXPORT_SYMBOL(_vmalloc2);
 
 /**
  * vmalloc - allocate virtually contiguous memory
@@ -3306,12 +3306,12 @@ EXPORT_SYMBOL(__vmalloc);
  *
  * Return: pointer to the allocated memory or %NULL on error
  */
-void *vmalloc(unsigned long size)
+void *_vmalloc(unsigned long size)
 {
-	return __vmalloc_node(size, 1, GFP_KERNEL, NUMA_NO_NODE,
-				__builtin_return_address(0));
+	return _vmalloc_node2(size, 1, GFP_KERNEL, NUMA_NO_NODE,
+			      __builtin_return_address(0));
 }
-EXPORT_SYMBOL(vmalloc);
+EXPORT_SYMBOL(_vmalloc);
 
 /**
  * vmalloc_huge - allocate virtually contiguous memory, allow huge pages
@@ -3325,13 +3325,13 @@ EXPORT_SYMBOL(vmalloc);
  *
  * Return: pointer to the allocated memory or %NULL on error
  */
-void *vmalloc_huge(unsigned long size, gfp_t gfp_mask)
+void *_vmalloc_huge(unsigned long size, gfp_t gfp_mask)
 {
-	return __vmalloc_node_range(size, 1, VMALLOC_START, VMALLOC_END,
-				    gfp_mask, PAGE_KERNEL, VM_ALLOW_HUGE_VMAP,
-				    NUMA_NO_NODE, __builtin_return_address(0));
+	return _vmalloc_node_range(size, 1, VMALLOC_START, VMALLOC_END,
+				   gfp_mask, PAGE_KERNEL, VM_ALLOW_HUGE_VMAP,
+				   NUMA_NO_NODE, __builtin_return_address(0));
 }
-EXPORT_SYMBOL_GPL(vmalloc_huge);
+EXPORT_SYMBOL_GPL(_vmalloc_huge);
 
 /**
  * vzalloc - allocate virtually contiguous memory with zero fill
@@ -3346,12 +3346,12 @@ EXPORT_SYMBOL_GPL(vmalloc_huge);
  *
  * Return: pointer to the allocated memory or %NULL on error
  */
-void *vzalloc(unsigned long size)
+void *_vzalloc(unsigned long size)
 {
-	return __vmalloc_node(size, 1, GFP_KERNEL | __GFP_ZERO, NUMA_NO_NODE,
-				__builtin_return_address(0));
+	return _vmalloc_node2(size, 1, GFP_KERNEL | __GFP_ZERO, NUMA_NO_NODE,
+			      __builtin_return_address(0));
 }
-EXPORT_SYMBOL(vzalloc);
+EXPORT_SYMBOL(_vzalloc);
 
 /**
  * vmalloc_user - allocate zeroed virtually contiguous memory for userspace
@@ -3362,14 +3362,14 @@ EXPORT_SYMBOL(vzalloc);
  *
  * Return: pointer to the allocated memory or %NULL on error
  */
-void *vmalloc_user(unsigned long size)
+void *_vmalloc_user(unsigned long size)
 {
-	return __vmalloc_node_range(size, SHMLBA,  VMALLOC_START, VMALLOC_END,
-				    GFP_KERNEL | __GFP_ZERO, PAGE_KERNEL,
-				    VM_USERMAP, NUMA_NO_NODE,
-				    __builtin_return_address(0));
+	return _vmalloc_node_range(size, SHMLBA,  VMALLOC_START, VMALLOC_END,
+				   GFP_KERNEL | __GFP_ZERO, PAGE_KERNEL,
+				   VM_USERMAP, NUMA_NO_NODE,
+				   __builtin_return_address(0));
 }
-EXPORT_SYMBOL(vmalloc_user);
+EXPORT_SYMBOL(_vmalloc_user);
 
 /**
  * vmalloc_node - allocate memory on a specific node
@@ -3384,12 +3384,12 @@ EXPORT_SYMBOL(vmalloc_user);
  *
  * Return: pointer to the allocated memory or %NULL on error
  */
-void *vmalloc_node(unsigned long size, int node)
+void *_vmalloc_node(unsigned long size, int node)
 {
-	return __vmalloc_node(size, 1, GFP_KERNEL, node,
-			__builtin_return_address(0));
+	return _vmalloc_node2(size, 1, GFP_KERNEL, node,
+			      __builtin_return_address(0));
 }
-EXPORT_SYMBOL(vmalloc_node);
+EXPORT_SYMBOL(_vmalloc_node);
 
 /**
  * vzalloc_node - allocate memory on a specific node with zero fill
@@ -3402,12 +3402,12 @@ EXPORT_SYMBOL(vmalloc_node);
  *
  * Return: pointer to the allocated memory or %NULL on error
  */
-void *vzalloc_node(unsigned long size, int node)
+void *_vzalloc_node(unsigned long size, int node)
 {
-	return __vmalloc_node(size, 1, GFP_KERNEL | __GFP_ZERO, node,
-				__builtin_return_address(0));
+	return _vmalloc_node2(size, 1, GFP_KERNEL | __GFP_ZERO, node,
+			      __builtin_return_address(0));
 }
-EXPORT_SYMBOL(vzalloc_node);
+EXPORT_SYMBOL(_vzalloc_node);
 
 #if defined(CONFIG_64BIT) && defined(CONFIG_ZONE_DMA32)
 #define GFP_VMALLOC32 (GFP_DMA32 | GFP_KERNEL)
@@ -3430,12 +3430,12 @@ EXPORT_SYMBOL(vzalloc_node);
  *
  * Return: pointer to the allocated memory or %NULL on error
  */
-void *vmalloc_32(unsigned long size)
+void *_vmalloc_32(unsigned long size)
 {
-	return __vmalloc_node(size, 1, GFP_VMALLOC32, NUMA_NO_NODE,
-			__builtin_return_address(0));
+	return _vmalloc_node2(size, 1, GFP_VMALLOC32, NUMA_NO_NODE,
+			      __builtin_return_address(0));
 }
-EXPORT_SYMBOL(vmalloc_32);
+EXPORT_SYMBOL(_vmalloc_32);
 
 /**
  * vmalloc_32_user - allocate zeroed virtually contiguous 32bit memory
@@ -3446,14 +3446,14 @@ EXPORT_SYMBOL(vmalloc_32);
  *
  * Return: pointer to the allocated memory or %NULL on error
  */
-void *vmalloc_32_user(unsigned long size)
+void *_vmalloc_32_user(unsigned long size)
 {
-	return __vmalloc_node_range(size, SHMLBA,  VMALLOC_START, VMALLOC_END,
-				    GFP_VMALLOC32 | __GFP_ZERO, PAGE_KERNEL,
-				    VM_USERMAP, NUMA_NO_NODE,
-				    __builtin_return_address(0));
+	return _vmalloc_node_range(size, SHMLBA,  VMALLOC_START, VMALLOC_END,
+				   GFP_VMALLOC32 | __GFP_ZERO, PAGE_KERNEL,
+				   VM_USERMAP, NUMA_NO_NODE,
+				   __builtin_return_address(0));
 }
-EXPORT_SYMBOL(vmalloc_32_user);
+EXPORT_SYMBOL(_vmalloc_32_user);
 
 /*
  * small helper routine , copy contents to buf from addr.

@@ -9,6 +9,8 @@
 #include <asm/page.h>		/* pgprot_t */
 #include <linux/rbtree.h>
 #include <linux/overflow.h>
+#include <linux/alloc_tag.h>
+#include <linux/dynamic_fault.h>
 
 #include <asm/vmalloc.h>
 
@@ -129,6 +131,16 @@ extern void vm_unmap_ram(const void *mem, unsigned int count);
 extern void *vm_map_ram(struct page **pages, unsigned int count, int node);
 extern void vm_unmap_aliases(void);
 
+#define vmalloc_hooks(_do_alloc)					\
+({									\
+	void *_res;							\
+	DEFINE_ALLOC_TAG(_alloc_tag, _old);				\
+									\
+	_res = !memory_fault() ? _do_alloc : NULL;			\
+	alloc_tag_restore(&_alloc_tag, _old);				\
+	_res;								\
+})
+
 #ifdef CONFIG_MMU
 extern void __init vmalloc_init(void);
 extern unsigned long vmalloc_nr_pages(void);
@@ -139,26 +151,72 @@ static inline void vmalloc_init(void)
 static inline unsigned long vmalloc_nr_pages(void) { return 0; }
 #endif
 
-extern void *vmalloc(unsigned long size) __alloc_size(1);
-extern void *vzalloc(unsigned long size) __alloc_size(1);
-extern void *vmalloc_user(unsigned long size) __alloc_size(1);
-extern void *vmalloc_node(unsigned long size, int node) __alloc_size(1);
-extern void *vzalloc_node(unsigned long size, int node) __alloc_size(1);
-extern void *vmalloc_32(unsigned long size) __alloc_size(1);
-extern void *vmalloc_32_user(unsigned long size) __alloc_size(1);
-extern void *__vmalloc(unsigned long size, gfp_t gfp_mask) __alloc_size(1);
-extern void *__vmalloc_node_range(unsigned long size, unsigned long align,
+extern void *_vmalloc(unsigned long size) __alloc_size(1);
+#define vmalloc(_size) \
+		vmalloc_hooks(_vmalloc(_size))
+extern void *_vzalloc(unsigned long size) __alloc_size(1);
+#define vzalloc(_size) \
+		vmalloc_hooks(_vzalloc(_size))
+extern void *_vmalloc_user(unsigned long size) __alloc_size(1);
+#define vmalloc_user(_size) \
+		vmalloc_hooks(_vmalloc_user(_size))
+extern void *_vmalloc_node(unsigned long size, int node) __alloc_size(1);
+#define vmalloc_node(_size, _node) \
+		vmalloc_hooks(_vmalloc_node(_size, _node))
+extern void *_vzalloc_node(unsigned long size, int node) __alloc_size(1);
+#define vzalloc_node(_size, _node) \
+		vmalloc_hooks(_vzalloc_node(_size, _node))
+extern void *_vmalloc_32(unsigned long size) __alloc_size(1);
+#define vmalloc_32(_size) \
+		vmalloc_hooks(_vmalloc_32(_size))
+extern void *_vmalloc_32_user(unsigned long size) __alloc_size(1);
+#define vmalloc_32_user(_size) \
+		vmalloc_hooks(_vmalloc_32_user(_size))
+extern void *_vmalloc2(unsigned long size, gfp_t gfp_mask) __alloc_size(1);
+#define __vmalloc(_size, _gfp_mask) \
+		vmalloc_hooks(_vmalloc2(_size, _gfp_mask))
+extern void *_vmalloc_node_range(unsigned long size, unsigned long align,
 			unsigned long start, unsigned long end, gfp_t gfp_mask,
 			pgprot_t prot, unsigned long vm_flags, int node,
 			const void *caller) __alloc_size(1);
-void *__vmalloc_node(unsigned long size, unsigned long align, gfp_t gfp_mask,
+#define __vmalloc_node_range(_size, _align, _start, _end, _gfp_mask, _prot, \
+			     _vm_flags, _node, _caller) \
+		vmalloc_hooks(_vmalloc_node_range(_size, _align, _start, \
+			_end, _gfp_mask, _prot, _vm_flags, _node, _caller))
+void *_vmalloc_node2(unsigned long size, unsigned long align, gfp_t gfp_mask,
 		int node, const void *caller) __alloc_size(1);
-void *vmalloc_huge(unsigned long size, gfp_t gfp_mask) __alloc_size(1);
+#define __vmalloc_node(_size, _align, _gfp_mask, _node, _caller) \
+		vmalloc_hooks(_vmalloc_node2(_size, _align, _gfp_mask, _node, \
+			_caller))
+void *_vmalloc_huge(unsigned long size, gfp_t gfp_mask) __alloc_size(1);
+#define vmalloc_huge(_size, _gfp_mask) \
+		vmalloc_hooks(_vmalloc_huge(_size, _gfp_mask))
 
-extern void *__vmalloc_array(size_t n, size_t size, gfp_t flags) __alloc_size(1, 2);
-extern void *vmalloc_array(size_t n, size_t size) __alloc_size(1, 2);
-extern void *__vcalloc(size_t n, size_t size, gfp_t flags) __alloc_size(1, 2);
-extern void *vcalloc(size_t n, size_t size) __alloc_size(1, 2);
+extern void *_vmalloc_array(size_t n, size_t size, gfp_t flags) __alloc_size(1, 2);
+#define __vmalloc_array(_n, _size, _flags) \
+		vmalloc_hooks(_vmalloc_array(_n, _size, _flags))
+/**
+ * vmalloc_array - allocate memory for a virtually contiguous array.
+ * @n: number of elements.
+ * @size: element size.
+ */
+#define vmalloc_array(_n, _size) \
+		vmalloc_hooks(_vmalloc_array(_n, _size, GFP_KERNEL))
+/**
+ * __vcalloc - allocate and zero memory for a virtually contiguous array.
+ * @n: number of elements.
+ * @size: element size.
+ * @flags: the type of memory to allocate (see kmalloc).
+ */
+#define __vcalloc(_n, _size, _flags) \
+		vmalloc_hooks(_vmalloc_array(_n, _size, _flags | __GFP_ZERO))
+/**
+ * vcalloc - allocate and zero memory for a virtually contiguous array.
+ * @n: number of elements.
+ * @size: element size.
+ */
+#define vcalloc(_n, _size) \
+		vmalloc_hooks(_vmalloc_array(_n, _size, GFP_KERNEL | __GFP_ZERO))
 
 extern void vfree(const void *addr);
 extern void vfree_atomic(const void *addr);
