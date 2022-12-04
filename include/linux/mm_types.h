@@ -480,7 +480,7 @@ struct vm_area_struct {
 
 #ifdef CONFIG_PER_VMA_LOCK
 	int vm_lock_seq;
-	struct rw_semaphore lock;
+	struct rw_semaphore *lock;
 #endif
 
 	union {

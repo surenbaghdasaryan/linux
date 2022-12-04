@@ -481,10 +481,26 @@ struct vm_area_struct *vm_area_dup(struct vm_area_struct *orig)
 }
 
 #ifdef CONFIG_PER_VMA_LOCK
+
+static struct kmem_cache *vma_lock_cachep;
+
+static void __init vma_lock_cache_init(void)
+{
+	vma_lock_cachep = KMEM_CACHE(rw_semaphore, SLAB_PANIC|SLAB_ACCOUNT);
+}
+
+void vma_init_lock(struct vm_area_struct *vma)
+{
+	vma->lock = kmem_cache_alloc(vma_lock_cachep, GFP_KERNEL);
+	init_rwsem(vma->lock);
+	vma->vm_lock_seq = -1;
+}
+
 static inline void __vm_area_free(struct vm_area_struct *vma)
 {
 	/* The vma should either have no lock holders or be write-locked. */
 	vma_assert_no_reader(vma);
+	kmem_cache_free(vma_lock_cachep, vma->lock);
 	kmem_cache_free(vm_area_cachep, vma);
 }
 
@@ -539,6 +555,8 @@ void vm_area_free(struct vm_area_struct *vma)
 }
 
 #else /* CONFIG_PER_VMA_LOCK */
+
+static void vma_lock_cache_init(void) {}
 
 void drain_free_vmas(struct mm_struct *mm) {}
 
@@ -3124,6 +3142,7 @@ void __init proc_caches_init(void)
 			sizeof_field(struct mm_struct, saved_auxv),
 			NULL);
 	vm_area_cachep = KMEM_CACHE(vm_area_struct, SLAB_PANIC|SLAB_ACCOUNT);
+	vma_lock_cache_init();
 	mmap_init();
 	nsproxy_cache_init();
 }

@@ -614,11 +614,8 @@ struct vm_operations_struct {
 };
 
 #ifdef CONFIG_PER_VMA_LOCK
-static inline void vma_init_lock(struct vm_area_struct *vma)
-{
-	init_rwsem(&vma->lock);
-	vma->vm_lock_seq = -1;
-}
+
+void vma_init_lock(struct vm_area_struct *vma);
 
 static inline void vma_write_lock(struct vm_area_struct *vma)
 {
@@ -634,9 +631,9 @@ static inline void vma_write_lock(struct vm_area_struct *vma)
 	if (vma->vm_lock_seq == mm_lock_seq)
 		return;
 
-	down_write(&vma->lock);
+	down_write(vma->lock);
 	vma->vm_lock_seq = mm_lock_seq;
-	up_write(&vma->lock);
+	up_write(vma->lock);
 }
 
 /*
@@ -650,7 +647,7 @@ static inline bool vma_read_trylock(struct vm_area_struct *vma)
 	if (vma->vm_lock_seq == READ_ONCE(vma->vm_mm->mm_lock_seq))
 		return false;
 
-	if (unlikely(down_read_trylock(&vma->lock) == 0))
+	if (unlikely(down_read_trylock(vma->lock) == 0))
 		return false;
 
 	/*
@@ -660,7 +657,7 @@ static inline bool vma_read_trylock(struct vm_area_struct *vma)
 	 * modification invalidates all existing locks.
 	 */
 	if (unlikely(vma->vm_lock_seq == READ_ONCE(vma->vm_mm->mm_lock_seq))) {
-		up_read(&vma->lock);
+		up_read(vma->lock);
 		return false;
 	}
 	return true;
@@ -668,13 +665,13 @@ static inline bool vma_read_trylock(struct vm_area_struct *vma)
 
 static inline void vma_read_unlock(struct vm_area_struct *vma)
 {
-	up_read(&vma->lock);
+	up_read(vma->lock);
 }
 
 static inline void vma_assert_locked(struct vm_area_struct *vma)
 {
-	lockdep_assert_held(&vma->lock);
-	VM_BUG_ON_VMA(!rwsem_is_locked(&vma->lock), vma);
+	lockdep_assert_held(vma->lock);
+	VM_BUG_ON_VMA(!rwsem_is_locked(vma->lock), vma);
 }
 
 static inline void vma_assert_write_locked(struct vm_area_struct *vma)
@@ -689,7 +686,7 @@ static inline void vma_assert_write_locked(struct vm_area_struct *vma)
 
 static inline void vma_assert_no_reader(struct vm_area_struct *vma)
 {
-	VM_BUG_ON_VMA(rwsem_is_locked(&vma->lock) &&
+	VM_BUG_ON_VMA(rwsem_is_locked(vma->lock) &&
 		      vma->vm_lock_seq != READ_ONCE(vma->vm_mm->mm_lock_seq),
 		      vma);
 }
