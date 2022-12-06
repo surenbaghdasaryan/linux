@@ -487,8 +487,19 @@ void kmem_cache_free(struct kmem_cache *s, void *objp);
  *
  * Note that interrupts must be enabled when calling these functions.
  */
+#define kmalloc_bulk_hooks(_do_alloc)                                   \
+({                                                                      \
+        int _res;                                                       \
+        DEFINE_ALLOC_TAG(_alloc_tag, _old);                             \
+                                                                        \
+        _res = !memory_fault() ? _do_alloc : 0;                         \
+        alloc_tag_restore(&_alloc_tag, _old);                           \
+        _res;                                                           \
+})
+
 void kmem_cache_free_bulk(struct kmem_cache *s, size_t size, void **p);
-int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size, void **p);
+int _kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size, void **p);
+#define kmem_cache_alloc_bulk(_s, _flags, _size, _p)    kmalloc_bulk_hooks(_kmem_cache_alloc_bulk(_s, _flags, _size, _p))
 
 /*
  * Caller must not use kfree_bulk() on memory not originally allocated

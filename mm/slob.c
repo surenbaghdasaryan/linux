@@ -707,7 +707,7 @@ void kmem_cache_free_bulk(struct kmem_cache *s, size_t nr, void **p)
 }
 EXPORT_SYMBOL(kmem_cache_free_bulk);
 
-int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t nr,
+int _kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t nr,
 								void **p)
 {
 	size_t i;
@@ -722,7 +722,7 @@ int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t nr,
 	}
 	return i;
 }
-EXPORT_SYMBOL(kmem_cache_alloc_bulk);
+EXPORT_SYMBOL(_kmem_cache_alloc_bulk);
 
 int __kmem_cache_shutdown(struct kmem_cache *c)
 {
