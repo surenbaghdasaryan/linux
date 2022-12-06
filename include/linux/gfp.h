@@ -264,7 +264,19 @@ static inline struct folio *folio_alloc(gfp_t gfp, unsigned int order)
 #define vma_alloc_folio(gfp, order, vma, addr, hugepage)		\
 	folio_alloc(gfp, order)
 #endif
-#define alloc_pages(gfp, order) pgtag_alloc_pages(gfp, order)
+
+#define pgalloc_hooks(_do_alloc, _res_type)				\
+({									\
+	_res_type _res;							\
+	DEFINE_ALLOC_TAG(_alloc_tag, _old);				\
+									\
+	_res = _do_alloc;						\
+	alloc_tag_restore(&_alloc_tag, _old);				\
+	_res;								\
+})
+
+#define alloc_pages(_gfp, _order) \
+		pgalloc_hooks(_alloc_pages(_gfp, _order), struct page *)
 #define alloc_page(gfp_mask) alloc_pages(gfp_mask, 0)
 static inline struct page *alloc_page_vma(gfp_t gfp,
 		struct vm_area_struct *vma, unsigned long addr)
@@ -274,9 +286,9 @@ static inline struct page *alloc_page_vma(gfp_t gfp,
 	return &folio->page;
 }
 
-extern unsigned long _get_free_pages(gfp_t gfp_mask, unsigned int order,
-				     struct page **ppage);
-#define __get_free_pages(gfp_mask, order) pgtag_get_free_pages(gfp_mask, order)
+extern unsigned long _get_free_pages(gfp_t gfp_mask, unsigned int order);
+#define __get_free_pages(_gfp_mask, _order) \
+		pgalloc_hooks(_get_free_pages(_gfp_mask, _order), unsigned long)
 extern unsigned long get_zeroed_page(gfp_t gfp_mask);
 
 void *alloc_pages_exact(size_t size, gfp_t gfp_mask) __alloc_size(1);

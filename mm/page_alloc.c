@@ -5581,6 +5581,10 @@ out:
 	trace_mm_page_alloc(page, order, alloc_gfp, ac.migratetype);
 	kmsan_alloc_page(page, order, alloc_gfp);
 
+	if (page)
+		alloc_tag_add(get_page_tag_ref(page), current->alloc_tag,
+			      PAGE_SIZE << order);
+
 	return page;
 }
 EXPORT_SYMBOL(__alloc_pages);
@@ -5602,14 +5606,11 @@ EXPORT_SYMBOL(__folio_alloc);
  * address cannot represent highmem pages. Use alloc_pages and then kmap if
  * you need to access high mem.
  */
-unsigned long _get_free_pages(gfp_t gfp_mask, unsigned int order,
-			      struct page **ppage)
+unsigned long _get_free_pages(gfp_t gfp_mask, unsigned int order)
 {
 	struct page *page;
 
 	page = _alloc_pages(gfp_mask & ~__GFP_HIGHMEM, order);
-	if (ppage)
-		*ppage = page;
 	if (!page)
 		return 0;
 	return (unsigned long) page_address(page);

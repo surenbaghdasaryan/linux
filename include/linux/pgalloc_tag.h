@@ -27,40 +27,7 @@ static inline void pgalloc_tag_dec(struct page *page, unsigned int order)
 		alloc_tag_sub(get_page_tag_ref(page), PAGE_SIZE << order);
 }
 
-/*
- * Redefinitions of the common page allocators/destructors
- */
-#define pgtag_alloc_pages(gfp, order)					\
-({									\
-	struct page *_page;						\
-	DEFINE_ALLOC_TAG(_alloc_tag, _old);				\
-									\
-	_page = _alloc_pages((gfp), (order));				\
-	alloc_tag_add(get_page_tag_ref(_page), &_alloc_tag,		\
-		      PAGE_SIZE << (order));				\
-	alloc_tag_restore(&_alloc_tag, _old);				\
-	_page;								\
-})
-
-#define pgtag_get_free_pages(gfp_mask, order)				\
-({									\
-	struct page *_page;						\
-	unsigned long _res;						\
-	DEFINE_ALLOC_TAG(_alloc_tag, _old);				\
-									\
-	_res = _get_free_pages((gfp_mask), (order), &_page);		\
-	alloc_tag_add(get_page_tag_ref(_page), &_alloc_tag,		\
-		      PAGE_SIZE << (order));				\
-	alloc_tag_restore(&_alloc_tag, _old);				\
-	_res;								\
-})
-
 #else /* CONFIG_ALLOC_TAGGING */
-
-#define pgtag_alloc_pages(gfp, order) _alloc_pages(gfp, order)
-
-#define pgtag_get_free_pages(gfp_mask, order) \
-	_get_free_pages((gfp_mask), (order), NULL)
 
 #define pgalloc_tag_dec(__page, __size)		do {} while (0)
 
