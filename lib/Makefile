@@ -225,7 +225,7 @@ obj-$(CONFIG_FUNCTION_ERROR_INJECTION) += error-inject.o
 
 obj-$(CONFIG_CODE_TAGGING) += codetag.o
 obj-$(CONFIG_ALLOC_TAGGING) += alloc_tag.o
-obj-$(CONFIG_PAGE_ALLOC_TAGGING) += pgalloc_tag.o
+obj-$(CONFIG_ALLOC_TAGGING) += pgalloc_tag.o
 
 obj-$(CONFIG_CODETAG_FAULT_INJECTION) += dynamic_fault.o
 obj-$(CONFIG_TIME_STATS) += time_stats.o

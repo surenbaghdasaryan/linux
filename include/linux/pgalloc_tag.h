@@ -5,7 +5,7 @@
 #ifndef _LINUX_PGALLOC_TAG_H
 #define _LINUX_PGALLOC_TAG_H
 
-#ifdef CONFIG_PAGE_ALLOC_TAGGING
+#ifdef CONFIG_ALLOC_TAGGING
 
 #include <linux/alloc_tag.h>
 #include <linux/page_ext.h>
@@ -55,7 +55,7 @@ static inline void pgalloc_tag_dec(struct page *page, unsigned int order)
 	_res;								\
 })
 
-#else /* CONFIG_PAGE_ALLOC_TAGGING */
+#else /* CONFIG_ALLOC_TAGGING */
 
 #define pgtag_alloc_pages(gfp, order) _alloc_pages(gfp, order)
 
@@ -64,6 +64,6 @@ static inline void pgalloc_tag_dec(struct page *page, unsigned int order)
 
 #define pgalloc_tag_dec(__page, __size)		do {} while (0)
 
-#endif /* CONFIG_PAGE_ALLOC_TAGGING */
+#endif /* CONFIG_ALLOC_TAGGING */
 
 #endif /* _LINUX_PGALLOC_TAG_H */

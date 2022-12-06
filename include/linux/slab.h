@@ -451,7 +451,7 @@ static_assert(PAGE_SHIFT <= 20);
 #define kmalloc_index(s) __kmalloc_index(s, true)
 #endif /* !CONFIG_SLOB */
 
-#ifdef CONFIG_SLAB_ALLOC_TAGGING
+#ifdef CONFIG_ALLOC_TAGGING
 #include <linux/alloc_tag.h>
 #else
 

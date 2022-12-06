@@ -528,7 +528,7 @@ static inline struct slabobj_ext *prepare_slab_obj_exts_hook(struct kmem_cache *
 
 #endif /* CONFIG_SLAB_OBJ_EXT */
 
-#ifdef CONFIG_SLAB_ALLOC_TAGGING
+#ifdef CONFIG_ALLOC_TAGGING
 
 static inline void alloc_tagging_slab_free_hook(struct kmem_cache *s, struct slab *slab,
 					void **p, int objects)
@@ -552,7 +552,7 @@ static inline void alloc_tagging_slab_free_hook(struct kmem_cache *s, struct sla
 static inline void alloc_tagging_slab_free_hook(struct kmem_cache *s, struct slab *slab,
 					void **p, int objects) {}
 
-#endif /* CONFIG_SLAB_ALLOC_TAGGING */
+#endif /* CONFIG_ALLOC_TAGGING */
 
 #ifdef CONFIG_MEMCG_KMEM
 void mod_objcg_state(struct obj_cgroup *objcg, struct pglist_data *pgdat,
@@ -826,7 +826,7 @@ static inline void slab_post_alloc_hook(struct kmem_cache *s,
 		kmsan_slab_alloc(s, p[i], flags);
 		obj_exts = prepare_slab_obj_exts_hook(s, flags, p[i]);
 
-#ifdef CONFIG_SLAB_ALLOC_TAGGING
+#ifdef CONFIG_ALLOC_TAGGING
 		if (likely(obj_exts))
 			alloc_tag_add(&obj_exts->ref, current->alloc_tag, s->size);
 #endif

@@ -13,18 +13,14 @@ static int __init ctagmod_start(void)
 {
 	printk(KERN_INFO "Loading ctagmod module...\n");
 
-#ifdef CONFIG_PAGE_ALLOC_TAGGING
+#ifdef CONFIG_ALLOC_TAGGING
 	pg_data = alloc_pages(GFP_KERNEL, 0);
 	if (unlikely(!pg_data)) {
 		printk(KERN_ERR "Failed to allocate a page!\n");
 		return -ENOMEM;
 	}
 	printk(KERN_INFO "Page is allocated\n");
-#else
-	printk(KERN_INFO "CONFIG_PAGE_ALLOC_TAGGING is undefined\n");
-#endif
 
-#ifdef CONFIG_SLAB_ALLOC_TAGGING
 	slab_data = kmalloc(10, GFP_KERNEL);
 	if (unlikely(!slab_data)) {
 		printk(KERN_ERR "Failed to allocate a slab object!\n");
@@ -32,7 +28,7 @@ static int __init ctagmod_start(void)
 	}
 	printk(KERN_INFO "Slab object is allocated\n");
 #else
-	printk(KERN_INFO "CONFIG_SLAB_ALLOC_TAGGING is undefined\n");
+	printk(KERN_INFO "CONFIG_ALLOC_TAGGING is undefined\n");
 #endif
 	return 0;
 }
