@@ -2163,7 +2163,7 @@ static struct page *alloc_pages_preferred_many(gfp_t gfp, unsigned int order,
  *
  * Return: The folio on success or NULL if allocation fails.
  */
-struct folio *vma_alloc_folio(gfp_t gfp, int order, struct vm_area_struct *vma,
+struct folio *_vma_alloc_folio(gfp_t gfp, int order, struct vm_area_struct *vma,
 		unsigned long addr, bool hugepage)
 {
 	struct mempolicy *pol;
@@ -2248,7 +2248,7 @@ struct folio *vma_alloc_folio(gfp_t gfp, int order, struct vm_area_struct *vma,
 out:
 	return folio;
 }
-EXPORT_SYMBOL(vma_alloc_folio);
+EXPORT_SYMBOL(_vma_alloc_folio);
 
 /**
  * alloc_pages - Allocate pages.
@@ -2290,7 +2290,7 @@ struct page *_alloc_pages(gfp_t gfp, unsigned int order)
 }
 EXPORT_SYMBOL(_alloc_pages);
 
-struct folio *folio_alloc(gfp_t gfp, unsigned order)
+struct folio *_folio_alloc(gfp_t gfp, unsigned order)
 {
 	struct page *page = alloc_pages(gfp | __GFP_COMP, order);
 
@@ -2298,7 +2298,7 @@ struct folio *folio_alloc(gfp_t gfp, unsigned order)
 		prep_transhuge_page(page);
 	return (struct folio *)page;
 }
-EXPORT_SYMBOL(folio_alloc);
+EXPORT_SYMBOL(_folio_alloc);
 
 static unsigned long alloc_pages_bulk_array_interleave(gfp_t gfp,
 		struct mempolicy *pol, unsigned long nr_pages,
@@ -2361,7 +2361,7 @@ static unsigned long alloc_pages_bulk_array_preferred_many(gfp_t gfp, int nid,
  * It can accelerate memory allocation especially interleaving
  * allocate memory.
  */
-unsigned long alloc_pages_bulk_array_mempolicy(gfp_t gfp,
+unsigned long _alloc_pages_bulk_array_mempolicy(gfp_t gfp,
 		unsigned long nr_pages, struct page **page_array)
 {
 	struct mempolicy *pol = &default_policy;
