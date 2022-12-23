@@ -2508,6 +2508,7 @@ extern void reserve_bootmem_region(phys_addr_t start, phys_addr_t end);
 /* Free the reserved page into the buddy system, so it gets managed. */
 static inline void free_reserved_page(struct page *page)
 {
+	set_codetag_empty(get_page_tag_ref(page));
 	ClearPageReserved(page);
 	init_page_count(page);
 	__free_page(page);
