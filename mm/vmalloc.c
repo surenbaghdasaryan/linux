@@ -3023,8 +3023,8 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 
 	/* Please note that the recursion is strictly bounded. */
 	if (array_size > PAGE_SIZE) {
-		area->pages = __vmalloc_node(array_size, 1, nested_gfp, node,
-					area->caller);
+		area->pages = _vmalloc_node2(array_size, 1, nested_gfp, node,
+					     area->caller);
 	} else {
 		area->pages = _kmalloc_node(array_size, nested_gfp, node);
 	}
