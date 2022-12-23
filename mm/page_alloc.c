@@ -2480,6 +2480,7 @@ inline void post_alloc_hook(struct page *page, unsigned int order,
 	bool init = !want_init_on_free() && want_init_on_alloc(gfp_flags) &&
 			!should_skip_init(gfp_flags);
 	bool init_tags = init && (gfp_flags & __GFP_ZEROTAGS);
+	union codetag_ref *ref;
 	int i;
 
 	set_page_private(page, 0);
@@ -2534,8 +2535,10 @@ inline void post_alloc_hook(struct page *page, unsigned int order,
 
 	set_page_owner(page, order, gfp_flags);
 	page_table_check_alloc(page, order);
-	alloc_tag_add(get_page_tag_ref(page), current->alloc_tag,
-		      PAGE_SIZE << order);
+
+	ref = get_page_tag_ref(page);
+	alloc_tag_add(ref, current->alloc_tag, PAGE_SIZE << order);
+	put_page_tag_ref(ref);
 }
 
 static void prep_new_page(struct page *page, unsigned int order, gfp_t gfp_flags,
