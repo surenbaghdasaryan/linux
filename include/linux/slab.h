@@ -646,7 +646,7 @@ static __always_inline __alloc_size(1) void *_kmalloc_node(size_t size, gfp_t fl
 		unsigned int index;
 
 		if (size > KMALLOC_MAX_CACHE_SIZE)
-			return kmalloc_large_node(size, flags, node);
+			return _kmalloc_large_node(size, flags, node);
 
 		index = kmalloc_index(size);
 
