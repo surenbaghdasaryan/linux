@@ -131,10 +131,10 @@ extern void vm_unmap_ram(const void *mem, unsigned int count);
 extern void *vm_map_ram(struct page **pages, unsigned int count, int node);
 extern void vm_unmap_aliases(void);
 
-#define vmalloc_hooks(_do_alloc)					\
+#define vmalloc_hooks(_do_alloc, _res_type)				\
 ({									\
-	void *_res;							\
-	DEFINE_ALLOC_TAG(_alloc_tag, _old);				\
+	_res_type _res;							\
+	DEFINE_ALLOC_TAG_NO_NESTING(_alloc_tag, _old);			\
 									\
 	_res = !memory_fault() ? _do_alloc : NULL;			\
 	alloc_tag_restore(&_alloc_tag, _old);				\
