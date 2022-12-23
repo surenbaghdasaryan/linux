@@ -1571,7 +1571,7 @@ preload_this_cpu_lock(spinlock_t *lock, gfp_t gfp_mask, int node)
 	 * condition and high memory pressure.
 	 */
 	if (!this_cpu_read(ne_fit_preload_node))
-		va = kmem_cache_alloc_node(vmap_area_cachep, gfp_mask, node);
+		va = _kmem_cache_alloc_node(vmap_area_cachep, gfp_mask, node);
 
 	spin_lock(lock);
 
@@ -1604,7 +1604,7 @@ static struct vmap_area *alloc_vmap_area(unsigned long size,
 	might_sleep();
 	gfp_mask = gfp_mask & GFP_RECLAIM_MASK;
 
-	va = kmem_cache_alloc_node(vmap_area_cachep, gfp_mask, node);
+	va = _kmem_cache_alloc_node(vmap_area_cachep, gfp_mask, node);
 	if (unlikely(!va))
 		return ERR_PTR(-ENOMEM);
 
@@ -2244,7 +2244,7 @@ EXPORT_SYMBOL(vm_unmap_ram);
  *
  * Returns: a pointer to the address that has been mapped, or %NULL on failure
  */
-void *vm_map_ram(struct page **pages, unsigned int count, int node)
+void *_vm_map_ram(struct page **pages, unsigned int count, int node)
 {
 	unsigned long size = (unsigned long)count << PAGE_SHIFT;
 	unsigned long addr;
@@ -2281,7 +2281,7 @@ void *vm_map_ram(struct page **pages, unsigned int count, int node)
 
 	return mem;
 }
-EXPORT_SYMBOL(vm_map_ram);
+EXPORT_SYMBOL(_vm_map_ram);
 
 static struct vm_struct *vmlist __initdata;
 
@@ -2491,7 +2491,7 @@ static struct vm_struct *__get_vm_area_node(unsigned long size,
 		align = 1ul << clamp_t(int, get_count_order_long(size),
 				       PAGE_SHIFT, IOREMAP_MAX_ORDER);
 
-	area = kmalloc_node(sizeof(*area), (gfp_mask & GFP_RECLAIM_MASK)|__GFP_ZERO, node);
+	area = _kmalloc_node(sizeof(*area), (gfp_mask & GFP_RECLAIM_MASK)|__GFP_ZERO, node);
 	if (unlikely(!area))
 		return NULL;
 
@@ -2521,7 +2521,7 @@ static struct vm_struct *__get_vm_area_node(unsigned long size,
 	return area;
 }
 
-struct vm_struct *__get_vm_area_caller(unsigned long size, unsigned long flags,
+struct vm_struct *_get_vm_area_caller2(unsigned long size, unsigned long flags,
 				       unsigned long start, unsigned long end,
 				       const void *caller)
 {
@@ -2540,7 +2540,7 @@ struct vm_struct *__get_vm_area_caller(unsigned long size, unsigned long flags,
  *
  * Return: the area descriptor on success or %NULL on failure.
  */
-struct vm_struct *get_vm_area(unsigned long size, unsigned long flags)
+struct vm_struct *_get_vm_area(unsigned long size, unsigned long flags)
 {
 	return __get_vm_area_node(size, 1, PAGE_SHIFT, flags,
 				  VMALLOC_START, VMALLOC_END,
@@ -2548,7 +2548,7 @@ struct vm_struct *get_vm_area(unsigned long size, unsigned long flags)
 				  __builtin_return_address(0));
 }
 
-struct vm_struct *get_vm_area_caller(unsigned long size, unsigned long flags,
+struct vm_struct *_get_vm_area_caller(unsigned long size, unsigned long flags,
 				const void *caller)
 {
 	return __get_vm_area_node(size, 1, PAGE_SHIFT, flags,
@@ -2944,12 +2944,12 @@ vm_area_alloc_pages(gfp_t gfp, int nid,
 			 * but mempolicy wants to alloc memory by interleaving.
 			 */
 			if (IS_ENABLED(CONFIG_NUMA) && nid == NUMA_NO_NODE)
-				nr = alloc_pages_bulk_array_mempolicy(bulk_gfp,
+				nr = _alloc_pages_bulk_array_mempolicy(bulk_gfp,
 							nr_pages_request,
 							pages + nr_allocated);
 
 			else
-				nr = alloc_pages_bulk_array_node(bulk_gfp, nid,
+				nr = _alloc_pages_bulk_array_node(bulk_gfp, nid,
 							nr_pages_request,
 							pages + nr_allocated);
 
@@ -2972,9 +2972,9 @@ vm_area_alloc_pages(gfp_t gfp, int nid,
 			break;
 
 		if (nid == NUMA_NO_NODE)
-			page = alloc_pages(gfp, order);
+			page = _alloc_pages(gfp, order);
 		else
-			page = alloc_pages_node(nid, gfp, order);
+			page = _alloc_pages_node(nid, gfp, order);
 		if (unlikely(!page))
 			break;
 		/*
