@@ -33,6 +33,7 @@ struct codetag {
 #define CTC_FLAG_CTX_PTR	(1 << 0)
 #define CTC_FLAG_CTX_READY	(1 << 1)
 #define CTC_FLAG_CTX_ENABLED	(1 << 2)
+#define CTC_FLAG_NO_NESTING	(1 << 3)
 
 /*
  * Code tag with context capture support. Contains a list to store context for
@@ -90,6 +91,14 @@ struct codetag_iterator {
 	.filename	= __FILE__,			\
 	.lineno		= __LINE__,			\
 	.flags		= 0,				\
+}
+
+#define CODE_TAG_INIT_NO_NESTING {			\
+	.modname	= KBUILD_MODNAME,		\
+	.function	= __func__,			\
+	.filename	= __FILE__,			\
+	.lineno		= __LINE__,			\
+	.flags		= CTC_FLAG_NO_NESTING,		\
 }
 
 static inline bool is_codetag_ctx_ref(union codetag_ref *ref)

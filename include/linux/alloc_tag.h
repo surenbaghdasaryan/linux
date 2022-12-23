@@ -38,10 +38,33 @@ struct codetag_ctx *alloc_tag_create_ctx(struct alloc_tag *tag, size_t size);
 void alloc_tag_free_ctx(struct codetag_ctx *ctx, struct alloc_tag **ptag);
 bool alloc_tag_enable_ctx(struct alloc_tag *tag, bool enable);
 
+#ifdef CONFIG_ALLOC_TAGGING_DEBUG
+
+static inline struct alloc_tag *alloc_tag_save_verify(struct alloc_tag *tag)
+{
+	struct alloc_tag *old = alloc_tag_save(tag);
+
+	WARN_ONCE(old && (old->ctc.ct.flags & CTC_FLAG_NO_NESTING),
+		  "alloc_tag is nested (got tag for %s:%u)\n",
+		  tag->ctc.ct.filename, tag->ctc.ct.lineno);
+	return old;
+}
+
+#else
+
+#define alloc_tag_save_verify alloc_tag_save
+
+#endif
+
 #define DEFINE_ALLOC_TAG(_alloc_tag, _old)				\
 	static struct alloc_tag _alloc_tag __used __aligned(8)		\
 	__section("alloc_tags") = { .ctc.ct = CODE_TAG_INIT };		\
-	struct alloc_tag * __maybe_unused _old = alloc_tag_save(&_alloc_tag)
+	struct alloc_tag * __maybe_unused _old = alloc_tag_save_verify(&_alloc_tag)
+
+#define DEFINE_ALLOC_TAG_NO_NESTING(_alloc_tag, _old)			\
+	static struct alloc_tag _alloc_tag __used __aligned(8)		\
+	__section("alloc_tags") = { .ctc.ct = CODE_TAG_INIT_NO_NESTING };\
+	struct alloc_tag * __maybe_unused _old = alloc_tag_save_verify(&_alloc_tag)
 
 extern struct static_key_true alloc_tagging_key;
 
@@ -126,6 +149,7 @@ static inline void alloc_tag_add(union codetag_ref *ref, struct alloc_tag *tag, 
 #else
 
 #define DEFINE_ALLOC_TAG(_alloc_tag, _old)
+#define DEFINE_ALLOC_TAG_NO_NESTING(_alloc_tag, _old)
 static inline void alloc_tag_sub(union codetag_ref *ref, size_t bytes) {}
 static inline void alloc_tag_add(union codetag_ref *ref, struct alloc_tag *tag,
 				 size_t bytes) {}
