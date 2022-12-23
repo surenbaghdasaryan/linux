@@ -127,7 +127,7 @@ static inline pgprot_t arch_vmap_pgprot_tagged(pgprot_t prot)
 #define vmalloc_hooks(_do_alloc, _res_type)				\
 ({									\
 	_res_type _res;							\
-	DEFINE_ALLOC_TAG_NO_NESTING(_alloc_tag, _old);			\
+	DEFINE_ALLOC_TAG(_alloc_tag, _old);				\
 									\
 	_res = !memory_fault() ? _do_alloc : NULL;			\
 	alloc_tag_restore(&_alloc_tag, _old);				\
