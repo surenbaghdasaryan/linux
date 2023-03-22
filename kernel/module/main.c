@@ -1147,9 +1147,11 @@ void __weak module_arch_freeing_init(struct module *mod)
 /* Free a module, remove from lists, etc. */
 static void free_module(struct module *mod)
 {
+	bool unload_codetags;
+
 	trace_module_free(mod);
 
-	codetag_unload_module(mod);
+	unload_codetags = codetag_unload_module(mod);
 	mod_sysfs_teardown(mod);
 
 	/*
@@ -1199,9 +1201,13 @@ static void free_module(struct module *mod)
 	lockdep_free_key_range(mod->data_layout.base, mod->data_layout.size);
 
 	/* Finally, free the core (containing the module structure) */
-	module_memfree(mod->core_layout.base);
 #ifdef CONFIG_ARCH_WANTS_MODULES_DATA_IN_VMALLOC
-	vfree(mod->data_layout.base);
+	module_memfree(mod->core_layout.base);
+	if (unload_codetags)
+		vfree(mod->data_layout.base);
+#else
+	if (unload_codetags)
+		module_memfree(mod->core_layout.base);
 #endif
 }
 
