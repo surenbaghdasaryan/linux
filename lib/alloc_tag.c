@@ -376,7 +376,7 @@ static void alloc_tag_module_unload(struct codetag_type *cttype, struct codetag_
 		size_t bytes = lazy_percpu_counter_read(&tag->bytes_allocated);
 
 		if (!WARN(bytes, "%s:%u module %s func:%s has %zu allocated at module unload",
-			  ct->filename, ct->lineno, ct->modname, ct->function))
+			  ct->filename, ct->lineno, ct->modname, ct->function, bytes))
 			lazy_percpu_counter_exit(&tag->bytes_allocated);
 	}
 }
