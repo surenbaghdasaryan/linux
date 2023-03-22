@@ -302,13 +302,15 @@ static void errcode_module_load(struct codetag_type *cttype, struct codetag_modu
 	}
 }
 
-static void errcode_module_unload(struct codetag_type *cttype, struct codetag_module *mod)
+static bool errcode_module_unload(struct codetag_type *cttype, struct codetag_module *mod)
 {
 	struct codetag_error_code *i, *start = (void *) mod->range.start;
 	struct codetag_error_code *end = (void *) mod->range.stop;
 
 	for (i = start; i != end; i++)
 		idr_remove(&dynamic_error_strings, abs(i->err));
+
+	return true;
 }
 
 static int __init errname_init(void)

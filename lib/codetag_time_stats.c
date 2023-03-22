@@ -112,13 +112,15 @@ static const struct file_operations time_stats_ops = {
 	.read	= time_stats_read,
 };
 
-static void time_stats_module_unload(struct codetag_type *cttype, struct codetag_module *mod)
+static bool time_stats_module_unload(struct codetag_type *cttype, struct codetag_module *mod)
 {
 	struct codetag_time_stats *i, *start = (void *) mod->range.start;
 	struct codetag_time_stats *end = (void *) mod->range.stop;
 
 	for (i = start; i != end; i++)
 		time_stats_exit(&i->stats);
+
+	return true;
 }
 
 static int __init codetag_time_stats_init(void)

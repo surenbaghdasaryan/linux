@@ -365,20 +365,34 @@ static int __init dbgfs_init(struct codetag_type *cttype)
 	return 0;
 }
 
-static void alloc_tag_module_unload(struct codetag_type *cttype, struct codetag_module *cmod)
+static bool alloc_tag_module_unload(struct codetag_type *cttype, struct codetag_module *cmod)
 {
 	struct codetag_iterator iter;
 	struct codetag *ct;
+	struct alloc_tag *tag;
+	s64 bytes_left;
+	bool leftover = false;
 
 	codetag_init_iter(&iter, cttype);
 	for (ct = codetag_next_ct(&iter); ct; ct = codetag_next_ct(&iter)) {
-		struct alloc_tag *tag = ct_to_alloc_tag(ct);
-		size_t bytes = lazy_percpu_counter_read(&tag->bytes_allocated);
+		if (iter.cmod != cmod)
+			continue;
 
-		if (!WARN(bytes, "%s:%u module %s func:%s has %zu allocated at module unload",
-			  ct->filename, ct->lineno, ct->modname, ct->function, bytes))
+		tag = ct_to_alloc_tag(ct);
+		bytes_left = lazy_percpu_counter_read(&tag->bytes_allocated);
+		if (likely(!bytes_left)) {
 			lazy_percpu_counter_exit(&tag->bytes_allocated);
+			continue;
+		}
+
+		pr_warn("%s:%u module %s func:%s has %lld bytes left allocated (possibly leaked)\n",
+			ct->filename, ct->lineno, ct->modname, ct->function,
+			bytes_left);
+		leftover = true;
 	}
+
+	/* Can't unload tags if there are leftover allocations */
+	return !leftover;
 }
 
 static __init bool need_page_alloc_tagging(void)
