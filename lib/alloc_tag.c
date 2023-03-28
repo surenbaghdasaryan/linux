@@ -89,11 +89,20 @@ static int allocations_file_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
+void *test_var = NULL;
+EXPORT_SYMBOL_GPL(test_var);
+
 static int allocations_file_release(struct inode *inode, struct file *file)
 {
 	struct alloc_tag_file_iterator *iter = file->private_data;
 
 	kfree(iter);
+
+	/* free memory allocated by a module */
+	if (test_var) {
+		kfree(test_var);
+		test_var = NULL;
+	}
 	return 0;
 }
 
