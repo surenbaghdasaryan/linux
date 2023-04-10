@@ -8,6 +8,8 @@
 #include <linux/seq_buf.h>
 #include <linux/uaccess.h>
 
+static struct codetag_type *alloc_tag_cttype;
+
 DEFINE_STATIC_KEY_TRUE(mem_alloc_profiling_key);
 
 /*
@@ -118,6 +120,42 @@ static ssize_t allocations_file_read(struct file *file, char __user *ubuf,
 	return err ? : buf.ret;
 }
 
+void alloc_tags_show_mem_report(struct seq_buf *s)
+{
+	struct codetag_iterator iter;
+	struct codetag *ct;
+	struct {
+		struct codetag		*tag;
+		size_t			bytes;
+	} tags[10], n;
+	unsigned int i, nr = 0;
+
+	codetag_lock_module_list(alloc_tag_cttype, true);
+	iter = codetag_get_ct_iter(alloc_tag_cttype);
+	while ((ct = codetag_next_ct(&iter))) {
+		n.tag	= ct;
+		n.bytes = lazy_percpu_counter_read(&ct_to_alloc_tag(ct)->bytes_allocated);
+
+		for (i = 0; i < nr; i++)
+			if (n.bytes > tags[i].bytes)
+				break;
+
+		if (i < ARRAY_SIZE(tags)) {
+			nr -= nr == ARRAY_SIZE(tags);
+			memmove(&tags[i + 1],
+				&tags[i],
+				sizeof(tags[0]) * (nr - i));
+			nr++;
+			tags[i] = n;
+		}
+	}
+
+	for (i = 0; i < nr; i++)
+		alloc_tag_to_text(s, tags[i].tag);
+
+	codetag_lock_module_list(alloc_tag_cttype, false);
+}
+
 static const struct file_operations allocations_file_ops = {
 	.owner	= THIS_MODULE,
 	.open	= allocations_file_open,
@@ -178,17 +216,16 @@ EXPORT_SYMBOL(page_alloc_tagging_ops);
 
 static int __init alloc_tag_init(void)
 {
-	struct codetag_type *cttype;
 	const struct codetag_type_desc desc = {
 		.section	= "alloc_tags",
 		.tag_size	= sizeof(struct alloc_tag),
 		.module_unload	= alloc_tag_module_unload,
 	};
 
-	cttype = codetag_register_type(&desc);
-	if (IS_ERR_OR_NULL(cttype))
-		return PTR_ERR(cttype);
+	alloc_tag_cttype = codetag_register_type(&desc);
+	if (IS_ERR_OR_NULL(alloc_tag_cttype))
+		return PTR_ERR(alloc_tag_cttype);
 
-	return dbgfs_init(cttype);
+	return dbgfs_init(alloc_tag_cttype);
 }
 module_init(alloc_tag_init);
