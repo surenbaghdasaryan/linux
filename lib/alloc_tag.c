@@ -10,7 +10,7 @@
 
 static struct codetag_type *alloc_tag_cttype;
 
-DEFINE_STATIC_KEY_TRUE(mem_alloc_profiling_key);
+DEFINE_STATIC_KEY_FALSE(mem_alloc_profiling_key);
 
 /*
  * Won't need to be exported once page allocation accounting is moved to the
@@ -18,12 +18,12 @@ DEFINE_STATIC_KEY_TRUE(mem_alloc_profiling_key);
  */
 EXPORT_SYMBOL(mem_alloc_profiling_key);
 
-static int __init mem_alloc_profiling_disable(char *s)
+static int __init mem_alloc_profiling_enable(char *s)
 {
-	static_branch_disable(&mem_alloc_profiling_key);
+	static_branch_enable(&mem_alloc_profiling_key);
 	return 1;
 }
-__setup("nomem_profiling", mem_alloc_profiling_disable);
+__setup("mem_profiling", mem_alloc_profiling_enable);
 
 struct alloc_tag_file_iterator {
 	struct codetag_iterator ct_iter;

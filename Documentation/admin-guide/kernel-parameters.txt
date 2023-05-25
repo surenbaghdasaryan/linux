@@ -3770,7 +3770,7 @@
 
 	nomce		[X86-32] Disable Machine Check Exception
 
-	nomem_profiling	Disable memory allocation profiling.
+	mem_profiling	Enable memory allocation profiling.
 
 	nomfgpt		[X86-32] Disable Multi-Function General Purpose
 			Timer usage (for AMD Geode machines).
