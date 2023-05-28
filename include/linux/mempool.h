@@ -42,19 +42,19 @@ int mempool_init_node(mempool_t *pool, int min_nr, mempool_alloc_t *alloc_fn,
 		      mempool_free_t *free_fn, void *pool_data,
 		      gfp_t gfp_mask, int node_id);
 
-int _mempool_init(mempool_t *pool, int min_nr, mempool_alloc_t *alloc_fn,
+int mempool_init_noprof(mempool_t *pool, int min_nr, mempool_alloc_t *alloc_fn,
 		 mempool_free_t *free_fn, void *pool_data);
 #define mempool_init(...)						\
-	alloc_hooks(_mempool_init(__VA_ARGS__))
+	alloc_hooks(mempool_init_noprof(__VA_ARGS__))
 
 extern mempool_t *mempool_create(int min_nr, mempool_alloc_t *alloc_fn,
 			mempool_free_t *free_fn, void *pool_data);
 
-extern mempool_t *_mempool_create_node(int min_nr, mempool_alloc_t *alloc_fn,
+extern mempool_t *mempool_create_node_noprof(int min_nr, mempool_alloc_t *alloc_fn,
 			mempool_free_t *free_fn, void *pool_data,
 			gfp_t gfp_mask, int nid);
 #define mempool_create_node(...)					\
-	alloc_hooks(_mempool_create_node(__VA_ARGS__))
+	alloc_hooks(mempool_create_node_noprof(__VA_ARGS__))
 
 #define mempool_create(_min_nr, _alloc_fn, _free_fn, _pool_data)	\
 	mempool_create_node(_min_nr, _alloc_fn, _free_fn, _pool_data,	\
@@ -63,9 +63,9 @@ extern mempool_t *_mempool_create_node(int min_nr, mempool_alloc_t *alloc_fn,
 extern int mempool_resize(mempool_t *pool, int new_min_nr);
 extern void mempool_destroy(mempool_t *pool);
 
-extern void *_mempool_alloc(mempool_t *pool, gfp_t gfp_mask) __malloc;
+extern void *mempool_alloc_noprof(mempool_t *pool, gfp_t gfp_mask) __malloc;
 #define mempool_alloc(...)						\
-	alloc_hooks(_mempool_alloc(__VA_ARGS__))
+	alloc_hooks(mempool_alloc_noprof(__VA_ARGS__))
 
 extern void mempool_free(void *element, mempool_t *pool);
 
