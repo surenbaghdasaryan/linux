@@ -964,7 +964,7 @@ config CODE_TAGGING
 config MEM_ALLOC_PROFILING
 	bool "Enable memory allocation profiling"
 	default n
-	depends on DEBUG_FS
+	depends on PROC_FS
 	select CODE_TAGGING
 	select LAZY_PERCPU_COUNTER
 	select PAGE_EXTENSION

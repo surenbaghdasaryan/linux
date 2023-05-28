@@ -5,6 +5,7 @@
 #include <linux/gfp.h>
 #include <linux/module.h>
 #include <linux/page_ext.h>
+#include <linux/proc_fs.h>
 #include <linux/seq_buf.h>
 #include <linux/uaccess.h>
 
@@ -25,99 +26,79 @@ static int __init mem_alloc_profiling_enable(char *s)
 }
 __setup("mem_profiling", mem_alloc_profiling_enable);
 
-struct alloc_tag_file_iterator {
-	struct codetag_iterator ct_iter;
-	struct seq_buf		buf;
-	char			rawbuf[4096];
-};
-
-struct user_buf {
-	char __user		*buf;	/* destination user buffer */
-	size_t			size;	/* size of requested read */
-	ssize_t			ret;	/* bytes read so far */
-};
-
-static int flush_ubuf(struct user_buf *dst, struct seq_buf *src)
+static void *allocinfo_start(struct seq_file *m, loff_t *pos)
 {
-	if (src->len) {
-		size_t bytes = min_t(size_t, src->len, dst->size);
-		int err = copy_to_user(dst->buf, src->buffer, bytes);
-
-		if (err)
-			return err;
-
-		dst->ret	+= bytes;
-		dst->buf	+= bytes;
-		dst->size	-= bytes;
-		src->len	-= bytes;
-		memmove(src->buffer, src->buffer + bytes, src->len);
-	}
-
-	return 0;
-}
-
-static int allocations_file_open(struct inode *inode, struct file *file)
-{
-	struct codetag_type *cttype = inode->i_private;
-	struct alloc_tag_file_iterator *iter;
+	struct codetag_iterator *iter;
+	struct codetag *ct;
+	loff_t node = *pos;
 
 	iter = kzalloc(sizeof(*iter), GFP_KERNEL);
+	m->private = iter;
 	if (!iter)
-		return -ENOMEM;
+		return NULL;
 
-	codetag_lock_module_list(cttype, true);
-	iter->ct_iter = codetag_get_ct_iter(cttype);
-	codetag_lock_module_list(cttype, false);
-	seq_buf_init(&iter->buf, iter->rawbuf, sizeof(iter->rawbuf));
-	file->private_data = iter;
+	codetag_lock_module_list(alloc_tag_cttype, true);
+	*iter = codetag_get_ct_iter(alloc_tag_cttype);
+	while ((ct = codetag_next_ct(iter)) != NULL && node)
+		node--;
 
-	return 0;
+	return ct ? iter : NULL;
 }
 
-static int allocations_file_release(struct inode *inode, struct file *file)
+static void *allocinfo_next(struct seq_file *m, void *arg, loff_t *pos)
 {
-	struct alloc_tag_file_iterator *iter = file->private_data;
+	struct codetag_iterator *iter = (struct codetag_iterator *)arg;
+	struct codetag *ct = codetag_next_ct(iter);
 
-	kfree(iter);
-	return 0;
+	(*pos)++;
+	if (!ct)
+		return NULL;
+
+	return iter;
 }
 
-static void alloc_tag_to_text(struct seq_buf *out, struct codetag *ct)
+static void allocinfo_stop(struct seq_file *m, void *arg)
+{
+	struct codetag_iterator *iter = (struct codetag_iterator *)m->private;
+
+	if (iter) {
+		codetag_lock_module_list(alloc_tag_cttype, false);
+		kfree(iter);
+	}
+}
+
+static void alloc_tag_to_text(char *buf, struct codetag *ct)
 {
 	struct alloc_tag *tag = ct_to_alloc_tag(ct);
-	char buf[10];
+	char val[10];
 
 	string_get_size(lazy_percpu_counter_read(&tag->bytes_allocated), 1,
-			STRING_UNITS_2, buf, sizeof(buf));
+			STRING_UNITS_2, val, sizeof(val));
 
-	seq_buf_printf(out, "%8s ", buf);
-	codetag_to_text(out, ct);
-	seq_buf_putc(out, '\n');
+	buf += sprintf(buf, "%8s ", val);
+	buf += codetag_to_text(buf, ct);
 }
 
-static ssize_t allocations_file_read(struct file *file, char __user *ubuf,
-				     size_t size, loff_t *ppos)
+static int allocinfo_show(struct seq_file *m, void *arg)
 {
-	struct alloc_tag_file_iterator *iter = file->private_data;
-	struct user_buf	buf = { .buf = ubuf, .size = size };
-	struct codetag *ct;
-	int err = 0;
+	struct codetag_iterator *iter = (struct codetag_iterator *)arg;
+	char buf[1024];
 
-	codetag_lock_module_list(iter->ct_iter.cttype, true);
-	while (1) {
-		err = flush_ubuf(&buf, &iter->buf);
-		if (err || !buf.size)
-			break;
+	alloc_tag_to_text(buf, iter->ct);
+	seq_printf(m, "%s\n", buf);
+	return 0;
+}
 
-		ct = codetag_next_ct(&iter->ct_iter);
-		if (!ct)
-			break;
+static const struct seq_operations allocinfo_seq_op = {
+	.start	= allocinfo_start,
+	.next	= allocinfo_next,
+	.stop	= allocinfo_stop,
+	.show	= allocinfo_show,
+};
 
-		alloc_tag_to_text(&iter->buf, ct);
-	}
-	codetag_lock_module_list(iter->ct_iter.cttype, false);
-
-	return err ? : buf.ret;
+static void __init procfs_init(void)
+{
+	proc_create_seq("allocinfo", 0444, NULL, &allocinfo_seq_op);
 }
 
 void alloc_tags_show_mem_report(struct seq_buf *s)
@@ -129,6 +110,7 @@ void alloc_tags_show_mem_report(struct seq_buf *s)
 		size_t			bytes;
 	} tags[10], n;
 	unsigned int i, nr = 0;
+	char buf[1024];
 
 	codetag_lock_module_list(alloc_tag_cttype, true);
 	iter = codetag_get_ct_iter(alloc_tag_cttype);
@@ -150,27 +132,12 @@ void alloc_tags_show_mem_report(struct seq_buf *s)
 		}
 	}
 
-	for (i = 0; i < nr; i++)
-		alloc_tag_to_text(s, tags[i].tag);
+	for (i = 0; i < nr; i++) {
+		alloc_tag_to_text(buf, tags[i].tag);
+		seq_buf_printf(s, "%s\n", buf);
+	}
 
 	codetag_lock_module_list(alloc_tag_cttype, false);
-}
-
-static const struct file_operations allocations_file_ops = {
-	.owner	= THIS_MODULE,
-	.open	= allocations_file_open,
-	.release = allocations_file_release,
-	.read	= allocations_file_read,
-};
-
-static int __init dbgfs_init(struct codetag_type *cttype)
-{
-	struct dentry *file;
-
-	file = debugfs_create_file("allocations", 0444, NULL, cttype,
-				   &allocations_file_ops);
-
-	return IS_ERR(file) ? PTR_ERR(file) : 0;
 }
 
 static bool alloc_tag_module_unload(struct codetag_type *cttype, struct codetag_module *cmod)
@@ -226,6 +193,7 @@ static int __init alloc_tag_init(void)
 	if (IS_ERR_OR_NULL(alloc_tag_cttype))
 		return PTR_ERR(alloc_tag_cttype);
 
-	return dbgfs_init(alloc_tag_cttype);
+	procfs_init();
+	return 0;
 }
 module_init(alloc_tag_init);
