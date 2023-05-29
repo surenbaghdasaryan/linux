@@ -73,7 +73,8 @@ static void alloc_tag_to_text(char *buf, struct codetag *ct)
 	char val[10];
 
 	string_get_size(lazy_percpu_counter_read(&tag->bytes_allocated), 1,
-			STRING_UNITS_2, val, sizeof(val));
+			STRING_SIZE_BASE2|STRING_SIZE_NOSPACE,
+			val, sizeof(val));
 
 	buf += sprintf(buf, "%8s ", val);
 	buf += codetag_to_text(buf, ct);
