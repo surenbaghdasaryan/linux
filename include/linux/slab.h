@@ -213,8 +213,8 @@ int kmem_cache_shrink(struct kmem_cache *s);
 /*
  * Common kmalloc functions provided by all allocators
  */
-void * __must_check _krealloc(const void *objp, size_t new_size, gfp_t flags) __realloc_size(2);
-#define krealloc(...)				alloc_hooks(_krealloc(__VA_ARGS__))
+void * __must_check krealloc_noprof(const void *objp, size_t new_size, gfp_t flags) __realloc_size(2);
+#define krealloc(...)				alloc_hooks(krealloc_noprof(__VA_ARGS__))
 
 void kfree(const void *objp);
 void kfree_sensitive(const void *objp);
@@ -467,12 +467,12 @@ void *__kmalloc(size_t size, gfp_t flags) __assume_kmalloc_alignment __alloc_siz
  *
  * Return: pointer to the new object or %NULL in case of error
  */
-void *_kmem_cache_alloc(struct kmem_cache *cachep, gfp_t flags) __assume_slab_alignment __malloc;
-#define kmem_cache_alloc(...)			alloc_hooks(_kmem_cache_alloc(__VA_ARGS__))
+void *kmem_cache_alloc_noprof(struct kmem_cache *cachep, gfp_t flags) __assume_slab_alignment __malloc;
+#define kmem_cache_alloc(...)			alloc_hooks(kmem_cache_alloc_noprof(__VA_ARGS__))
 
-void *_kmem_cache_alloc_lru(struct kmem_cache *s, struct list_lru *lru,
+void *kmem_cache_alloc_lru_noprof(struct kmem_cache *s, struct list_lru *lru,
 			    gfp_t gfpflags) __assume_slab_alignment __malloc;
-#define kmem_cache_alloc_lru(...)		alloc_hooks(_kmem_cache_alloc_lru(__VA_ARGS__))
+#define kmem_cache_alloc_lru(...)		alloc_hooks(kmem_cache_alloc_lru_noprof(__VA_ARGS__))
 
 void kmem_cache_free(struct kmem_cache *s, void *objp);
 
@@ -485,8 +485,8 @@ void kmem_cache_free(struct kmem_cache *s, void *objp);
  */
 void kmem_cache_free_bulk(struct kmem_cache *s, size_t size, void **p);
 
-int _kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size, void **p);
-#define kmem_cache_alloc_bulk(...)		alloc_hooks(_kmem_cache_alloc_bulk(__VA_ARGS__))
+int kmem_cache_alloc_bulk_noprof(struct kmem_cache *s, gfp_t flags, size_t size, void **p);
+#define kmem_cache_alloc_bulk(...)		alloc_hooks(kmem_cache_alloc_bulk_noprof(__VA_ARGS__))
 
 static __always_inline void kfree_bulk(size_t size, void **p)
 {
@@ -495,27 +495,27 @@ static __always_inline void kfree_bulk(size_t size, void **p)
 
 void *__kmalloc_node(size_t size, gfp_t flags, int node) __assume_kmalloc_alignment
 							 __alloc_size(1);
-void *_kmem_cache_alloc_node(struct kmem_cache *s, gfp_t flags, int node) __assume_slab_alignment
+void *kmem_cache_alloc_node_noprof(struct kmem_cache *s, gfp_t flags, int node) __assume_slab_alignment
 									  __malloc;
-#define kmem_cache_alloc_node(...)		alloc_hooks(_kmem_cache_alloc_node(__VA_ARGS__))
+#define kmem_cache_alloc_node(...)		alloc_hooks(kmem_cache_alloc_node_noprof(__VA_ARGS__))
 
-void *_kmalloc_trace(struct kmem_cache *s, gfp_t flags, size_t size)
+void *kmalloc_trace_noprof(struct kmem_cache *s, gfp_t flags, size_t size)
 		    __assume_kmalloc_alignment __alloc_size(3);
 
-void *_kmalloc_node_trace(struct kmem_cache *s, gfp_t gfpflags,
-			 int node, size_t size) __assume_kmalloc_alignment
+void *kmalloc_node_trace_noprof(struct kmem_cache *s, gfp_t gfpflags,
+		int node, size_t size) __assume_kmalloc_alignment
 						__alloc_size(4);
-#define kmalloc_trace(...)			alloc_hooks(_kmalloc_trace(__VA_ARGS__))
+#define kmalloc_trace(...)			alloc_hooks(kmalloc_trace_noprof(__VA_ARGS__))
 
-#define kmalloc_node_trace(...)			alloc_hooks(_kmalloc_node_trace(__VA_ARGS__))
+#define kmalloc_node_trace(...)			alloc_hooks(kmalloc_node_trace_noprof(__VA_ARGS__))
 
-void *_kmalloc_large(size_t size, gfp_t flags) __assume_page_alignment
+void *kmalloc_large_noprof(size_t size, gfp_t flags) __assume_page_alignment
 					      __alloc_size(1);
-#define kmalloc_large(...)			alloc_hooks(_kmalloc_large(__VA_ARGS__))
+#define kmalloc_large(...)			alloc_hooks(kmalloc_large_noprof(__VA_ARGS__))
 
-void *_kmalloc_large_node(size_t size, gfp_t flags, int node) __assume_page_alignment
+void *kmalloc_large_node_noprof(size_t size, gfp_t flags, int node) __assume_page_alignment
 							     __alloc_size(1);
-#define kmalloc_large_node(...)			alloc_hooks(_kmalloc_large_node(__VA_ARGS__))
+#define kmalloc_large_node(...)			alloc_hooks(kmalloc_large_node_noprof(__VA_ARGS__))
 
 /**
  * kmalloc - allocate kernel memory
@@ -571,39 +571,39 @@ void *_kmalloc_large_node(size_t size, gfp_t flags, int node) __assume_page_alig
  *	Try really hard to succeed the allocation but fail
  *	eventually.
  */
-static __always_inline __alloc_size(1) void *_kmalloc(size_t size, gfp_t flags)
+static __always_inline __alloc_size(1) void *kmalloc_noprof(size_t size, gfp_t flags)
 {
 	if (__builtin_constant_p(size) && size) {
 		unsigned int index;
 
 		if (size > KMALLOC_MAX_CACHE_SIZE)
-			return _kmalloc_large(size, flags);
+			return kmalloc_large_noprof(size, flags);
 
 		index = kmalloc_index(size);
-		return _kmalloc_trace(
+		return kmalloc_trace_noprof(
 				kmalloc_caches[kmalloc_type(flags)][index],
 				flags, size);
 	}
 	return __kmalloc(size, flags);
 }
-#define kmalloc(...)				alloc_hooks(_kmalloc(__VA_ARGS__))
+#define kmalloc(...)				alloc_hooks(kmalloc_noprof(__VA_ARGS__))
 
-static __always_inline __alloc_size(1) void *_kmalloc_node(size_t size, gfp_t flags, int node)
+static __always_inline __alloc_size(1) void *kmalloc_node_noprof(size_t size, gfp_t flags, int node)
 {
 	if (__builtin_constant_p(size) && size) {
 		unsigned int index;
 
 		if (size > KMALLOC_MAX_CACHE_SIZE)
-			return _kmalloc_large_node(size, flags, node);
+			return kmalloc_large_node_noprof(size, flags, node);
 
 		index = kmalloc_index(size);
-		return _kmalloc_node_trace(
+		return kmalloc_node_trace_noprof(
 				kmalloc_caches[kmalloc_type(flags)][index],
 				flags, node, size);
 	}
 	return __kmalloc_node(size, flags, node);
 }
-#define kmalloc_node(...)			alloc_hooks(_kmalloc_node(__VA_ARGS__))
+#define kmalloc_node(...)			alloc_hooks(kmalloc_node_noprof(__VA_ARGS__))
 
 /**
  * kmalloc_array - allocate memory for an array.
@@ -611,17 +611,17 @@ static __always_inline __alloc_size(1) void *_kmalloc_node(size_t size, gfp_t fl
  * @size: element size.
  * @flags: the type of memory to allocate (see kmalloc).
  */
-static inline __alloc_size(1, 2) void *_kmalloc_array(size_t n, size_t size, gfp_t flags)
+static inline __alloc_size(1, 2) void *kmalloc_array_noprof(size_t n, size_t size, gfp_t flags)
 {
 	size_t bytes;
 
 	if (unlikely(check_mul_overflow(n, size, &bytes)))
 		return NULL;
 	if (__builtin_constant_p(n) && __builtin_constant_p(size))
-		return _kmalloc(bytes, flags);
-	return _kmalloc(bytes, flags);
+		return kmalloc_noprof(bytes, flags);
+	return kmalloc_noprof(bytes, flags);
 }
-#define kmalloc_array(...)			alloc_hooks(_kmalloc_array(__VA_ARGS__))
+#define kmalloc_array(...)			alloc_hooks(kmalloc_array_noprof(__VA_ARGS__))
 
 /**
  * krealloc_array - reallocate memory for an array.
@@ -630,7 +630,7 @@ static inline __alloc_size(1, 2) void *_kmalloc_array(size_t n, size_t size, gfp
  * @new_size: new size of a single member of the array
  * @flags: the type of memory to allocate (see kmalloc)
  */
-static inline __realloc_size(2, 3) void * __must_check _krealloc_array(void *p,
+static inline __realloc_size(2, 3) void * __must_check krealloc_array_noprof(void *p,
 								       size_t new_n,
 								       size_t new_size,
 								       gfp_t flags)
@@ -640,9 +640,9 @@ static inline __realloc_size(2, 3) void * __must_check _krealloc_array(void *p,
 	if (unlikely(check_mul_overflow(new_n, new_size, &bytes)))
 		return NULL;
 
-	return _krealloc(p, bytes, flags);
+	return krealloc_noprof(p, bytes, flags);
 }
-#define krealloc_array(...)			alloc_hooks(_krealloc_array(__VA_ARGS__))
+#define krealloc_array(...)			alloc_hooks(krealloc_array_noprof(__VA_ARGS__))
 
 /**
  * kcalloc - allocate memory for an array. The memory is set to zero.
@@ -652,10 +652,10 @@ static inline __realloc_size(2, 3) void * __must_check _krealloc_array(void *p,
  */
 #define kcalloc(_n, _size, _flags)		kmalloc_array(_n, _size, (_flags) | __GFP_ZERO)
 
-void *__kmalloc_node_track_caller(size_t size, gfp_t flags, int node,
+void *kmalloc_node_track_caller_noprof(size_t size, gfp_t flags, int node,
 				  unsigned long caller) __alloc_size(1);
 #define kmalloc_node_track_caller(size, flags, node)			\
-	alloc_hooks(__kmalloc_node_track_caller(size, flags, node, _RET_IP_))
+	alloc_hooks(kmalloc_node_track_caller_noprof(size, flags, node, _RET_IP_))
 
 /*
  * kmalloc_track_caller is a special version of kmalloc that records the
@@ -667,7 +667,7 @@ void *__kmalloc_node_track_caller(size_t size, gfp_t flags, int node,
  */
 #define kmalloc_track_caller(size, flags)	kmalloc_node_track_caller(size, flags, NUMA_NO_NODE)
 
-static inline __alloc_size(1, 2) void *_kmalloc_array_node(size_t n, size_t size, gfp_t flags,
+static inline __alloc_size(1, 2) void *kmalloc_array_node_noprof(size_t n, size_t size, gfp_t flags,
 							  int node)
 {
 	size_t bytes;
@@ -675,10 +675,10 @@ static inline __alloc_size(1, 2) void *_kmalloc_array_node(size_t n, size_t size
 	if (unlikely(check_mul_overflow(n, size, &bytes)))
 		return NULL;
 	if (__builtin_constant_p(n) && __builtin_constant_p(size))
-		return _kmalloc_node(bytes, flags, node);
+		return kmalloc_node_noprof(bytes, flags, node);
 	return __kmalloc_node(bytes, flags, node);
 }
-#define kmalloc_array_node(...)			alloc_hooks(_kmalloc_array_node(__VA_ARGS__))
+#define kmalloc_array_node(...)			alloc_hooks(kmalloc_array_node_noprof(__VA_ARGS__))
 
 #define kcalloc_node(_n, _size, _flags, _node)	kmalloc_array_node(_n, _size, (_flags) | __GFP_ZERO, _node)
 
@@ -695,8 +695,8 @@ static inline __alloc_size(1, 2) void *_kmalloc_array_node(size_t n, size_t size
 #define kzalloc(_size, _flags)			kmalloc(_size, (_flags)|__GFP_ZERO)
 #define kzalloc_node(_size, _flags, _node)	kmalloc_node(_size, (_flags)|__GFP_ZERO, _node)
 
-extern void *_kvmalloc_node(size_t size, gfp_t flags, int node) __alloc_size(1);
-#define kvmalloc_node(...)			alloc_hooks(_kvmalloc_node(__VA_ARGS__))
+extern void *kvmalloc_node_noprof(size_t size, gfp_t flags, int node) __alloc_size(1);
+#define kvmalloc_node(...)			alloc_hooks(kvmalloc_node_noprof(__VA_ARGS__))
 
 #define kvmalloc(_size, _flags)			kvmalloc_node(_size, _flags, NUMA_NO_NODE)
 #define kvzalloc(_size, _flags)			kvmalloc(_size, _flags|__GFP_ZERO)
@@ -712,9 +712,9 @@ extern void *_kvmalloc_node(size_t size, gfp_t flags, int node) __alloc_size(1);
 
 #define kvcalloc(_n, _size, _flags)		kvmalloc_array(_n, _size, _flags|__GFP_ZERO)
 
-extern void *_kvrealloc(const void *p, size_t oldsize, size_t newsize, gfp_t flags)
+extern void *kvrealloc_noprof(const void *p, size_t oldsize, size_t newsize, gfp_t flags)
 		      __realloc_size(3);
-#define kvrealloc(...)				alloc_hooks(_kvrealloc(__VA_ARGS__))
+#define kvrealloc(...)				alloc_hooks(kvrealloc_noprof(__VA_ARGS__))
 
 extern void kvfree(const void *addr);
 extern void kvfree_sensitive(const void *addr, size_t len);
