@@ -125,15 +125,15 @@ extern bool is_kernel_percpu_address(unsigned long addr);
 extern void __init setup_per_cpu_areas(void);
 #endif
 
-extern void __percpu *__pcpu_alloc(size_t size, size_t align, bool reserved,
+extern void __percpu *pcpu_alloc_noprof(size_t size, size_t align, bool reserved,
 				   gfp_t gfp) __alloc_size(1);
 
 #define __alloc_percpu_gfp(_size, _align, _gfp)				\
-	alloc_hooks(__pcpu_alloc(_size, _align, false, _gfp))
+	alloc_hooks(pcpu_alloc_noprof(_size, _align, false, _gfp))
 #define __alloc_percpu(_size, _align)					\
-	alloc_hooks(__pcpu_alloc(_size, _align, false, GFP_KERNEL))
+	alloc_hooks(pcpu_alloc_noprof(_size, _align, false, GFP_KERNEL))
 #define __alloc_reserved_percpu(_size, _align)				\
-	alloc_hooks(__pcpu_alloc(_size, _align, true, GFP_KERNEL))
+	alloc_hooks(pcpu_alloc_noprof(_size, _align, true, GFP_KERNEL))
 
 #define alloc_percpu_gfp(type, gfp)					\
 	(typeof(type) __percpu *)__alloc_percpu_gfp(sizeof(type),	\

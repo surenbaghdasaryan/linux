@@ -1728,7 +1728,7 @@ static void pcpu_alloc_tag_free_hook(struct pcpu_chunk *chunk, int off, size_t s
 #endif
 
 /**
- * __pcpu_alloc - the percpu allocator
+ * pcpu_alloc_noprof - the percpu allocator
  * @size: size of area to allocate in bytes
  * @align: alignment of area (max PAGE_SIZE)
  * @reserved: allocate from the reserved chunk if available
@@ -1742,8 +1742,8 @@ static void pcpu_alloc_tag_free_hook(struct pcpu_chunk *chunk, int off, size_t s
  * RETURNS:
  * Percpu pointer to the allocated area on success, NULL on failure.
  */
-void __percpu *__pcpu_alloc(size_t size, size_t align, bool reserved,
-			    gfp_t gfp)
+void __percpu *pcpu_alloc_noprof(size_t size, size_t align, bool reserved,
+				 gfp_t gfp)
 {
 	gfp_t pcpu_gfp;
 	bool is_atomic;
@@ -1937,7 +1937,7 @@ fail:
 
 	return NULL;
 }
-EXPORT_SYMBOL_GPL(__pcpu_alloc);
+EXPORT_SYMBOL_GPL(pcpu_alloc_noprof);
 
 /**
  * pcpu_balance_free - manage the amount of free chunks
