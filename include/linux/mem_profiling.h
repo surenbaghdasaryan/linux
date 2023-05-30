@@ -35,11 +35,13 @@ static inline struct alloc_tag *ct_to_alloc_tag(struct codetag *ct)
 	__section("alloc_tags") = { .ct = CODE_TAG_INIT };		\
 	struct alloc_tag * __maybe_unused _old = alloc_tag_save(&_alloc_tag)
 
-extern struct static_key_false mem_alloc_profiling_key;
+DECLARE_STATIC_KEY_MAYBE(CONFIG_MEM_ALLOC_PROFILING_ENABLED_BY_DEFAULT,
+			mem_alloc_profiling_key);
 
 static inline bool mem_alloc_profiling_enabled(void)
 {
-	return static_branch_unlikely(&mem_alloc_profiling_key);
+	return static_branch_maybe(CONFIG_MEM_ALLOC_PROFILING_ENABLED_BY_DEFAULT,
+				   &mem_alloc_profiling_key);
 }
 
 #ifdef CONFIG_MEM_ALLOC_PROFILING_DEBUG

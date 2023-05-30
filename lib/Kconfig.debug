@@ -974,10 +974,16 @@ config MEM_ALLOC_PROFILING
 	  initiated at that code location. The mechanism can be used to track
 	  memory leaks with a low performance impact.
 
+config MEM_ALLOC_PROFILING_ENABLED_BY_DEFAULT
+	bool "Disable memory allocation profiling by default"
+	default y
+	depends on MEM_ALLOC_PROFILING
+
 config MEM_ALLOC_PROFILING_DEBUG
 	bool "Memory allocation profiler debugging"
 	default n
 	depends on MEM_ALLOC_PROFILING
+	select MEM_ALLOC_PROFILING_ENABLED_BY_DEFAULT
 	help
 	  Adds warnings with helpful error messages for memory allocation
 	  profiling.
