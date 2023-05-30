@@ -5,7 +5,7 @@
 #include <linux/errno.h>
 #include <linux/mmdebug.h>
 #include <linux/gfp.h>
-#include <linux/pgalloc_tag.h>
+#include <linux/pg_mem_profiling.h>
 #include <linux/bug.h>
 #include <linux/list.h>
 #include <linux/mmzone.h>

@@ -10,7 +10,7 @@
 #include <linux/page_idle.h>
 #include <linux/page_table_check.h>
 #include <linux/rcupdate.h>
-#include <linux/pgalloc_tag.h>
+#include <linux/pg_mem_profiling.h>
 
 /*
  * struct page extension

@@ -37,7 +37,7 @@
 #include <linux/page_owner.h>
 #include <linux/sched/sysctl.h>
 #include <linux/memory-tiers.h>
-#include <linux/pgalloc_tag.h>
+#include <linux/pg_mem_profiling.h>
 
 #include <asm/tlb.h>
 #include <asm/pgalloc.h>

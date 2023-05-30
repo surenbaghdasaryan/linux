@@ -6,7 +6,7 @@
 
 #include <linux/mmzone.h>
 #include <linux/topology.h>
-#include <linux/alloc_tag.h>
+#include <linux/mem_profiling.h>
 #include <linux/sched.h>
 
 struct vm_area_struct;

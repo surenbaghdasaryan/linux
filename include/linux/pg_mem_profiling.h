@@ -2,10 +2,10 @@
 /*
  * page allocation tagging
  */
-#ifndef _LINUX_PGALLOC_TAG_H
-#define _LINUX_PGALLOC_TAG_H
+#ifndef _LINUX_PG_MEM_PROFILING_H
+#define _LINUX_PG_MEM_PROFILING_H
 
-#include <linux/alloc_tag.h>
+#include <linux/mem_profiling.h>
 
 #ifdef CONFIG_MEM_ALLOC_PROFILING
 
@@ -90,4 +90,4 @@ static inline void pgalloc_tag_split(struct page *page, unsigned int nr) {}
 
 #endif /* CONFIG_MEM_ALLOC_PROFILING */
 
-#endif /* _LINUX_PGALLOC_TAG_H */
+#endif /* _LINUX_PG_MEM_PROFILING_H */

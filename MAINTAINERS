@@ -13493,10 +13493,9 @@ MEMORY ALLOCATION PROFILING
 M:	Suren Baghdasaryan <surenb@google.com>
 M:	Kent Overstreet <kent.overstreet@linux.dev>
 S:	Maintained
-F:	include/linux/alloc_tag.h
-F:	include/linux/codetag_ctx.h
-F:	lib/alloc_tag.c
-F:	lib/pgalloc_tag.c
+F:	include/linux/mem_profiling.h
+F:	include/linux/pg_mem_profiling.h
+F:	mm/profiling.c
 
 MEMORY CONTROLLER DRIVERS
 M:	Krzysztof Kozlowski <krzysztof.kozlowski@linaro.org>

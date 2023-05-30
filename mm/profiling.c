@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-#include <linux/alloc_tag.h>
+#include <linux/mem_profiling.h>
 #include <linux/debugfs.h>
 #include <linux/fs.h>
 #include <linux/gfp.h>

@@ -2,8 +2,8 @@
 /*
  * allocation tagging
  */
-#ifndef _LINUX_ALLOC_TAG_H
-#define _LINUX_ALLOC_TAG_H
+#ifndef _LINUX_MEM_PROFILING_H
+#define _LINUX_MEM_PROFILING_H
 
 #include <linux/bug.h>
 #include <linux/codetag.h>
@@ -136,4 +136,4 @@ static inline void alloc_tag_add(union codetag_ref *ref, struct alloc_tag *tag,
 	_res;								\
 })
 
-#endif /* _LINUX_ALLOC_TAG_H */
+#endif /* _LINUX_MEM_PROFILING_H */

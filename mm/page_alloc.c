@@ -74,7 +74,7 @@
 #include <linux/psi.h>
 #include <linux/khugepaged.h>
 #include <linux/delayacct.h>
-#include <linux/pgalloc_tag.h>
+#include <linux/pg_mem_profiling.h>
 #include <asm/sections.h>
 #include <asm/tlbflush.h>
 #include <asm/div64.h>
