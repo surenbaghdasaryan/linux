@@ -975,7 +975,7 @@ config MEM_ALLOC_PROFILING
 	  memory leaks with a low performance impact.
 
 config MEM_ALLOC_PROFILING_ENABLED_BY_DEFAULT
-	bool "Disable memory allocation profiling by default"
+	bool "Enable memory allocation profiling by default"
 	default y
 	depends on MEM_ALLOC_PROFILING
 
