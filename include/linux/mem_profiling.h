@@ -8,7 +8,8 @@
 #include <linux/bug.h>
 #include <linux/codetag.h>
 #include <linux/container_of.h>
-#include <linux/lazy-percpu-counter.h>
+#include <asm/percpu.h>
+#include <linux/cpumask.h>
 #include <linux/static_key.h>
 
 /*
@@ -18,7 +19,7 @@
  */
 struct alloc_tag {
 	struct codetag			ct;
-	struct lazy_percpu_counter	bytes_allocated;
+	u64 __percpu			*bytes_allocated;
 } __aligned(8);
 
 #ifdef CONFIG_MEM_ALLOC_PROFILING
@@ -66,8 +67,19 @@ static inline void set_codetag_empty(union codetag_ref *ref) {}
 
 #endif /* CONFIG_MEM_ALLOC_PROFILING_DEBUG */
 
+static inline u64 alloc_tag_read(struct alloc_tag *tag)
+{
+	u64 v = 0;
+	int cpu;
+
+	for_each_possible_cpu(cpu)
+		v += *per_cpu_ptr(tag->bytes_allocated, cpu);
+
+	return v;
+}
+
 static inline void __alloc_tag_sub(union codetag_ref *ref, size_t bytes,
-				   bool may_allocate)
+				   bool)
 {
 	struct alloc_tag *tag;
 
@@ -84,10 +96,7 @@ static inline void __alloc_tag_sub(union codetag_ref *ref, size_t bytes,
 
 	tag = ct_to_alloc_tag(ref->ct);
 
-	if (may_allocate)
-		lazy_percpu_counter_add(&tag->bytes_allocated, -bytes);
-	else
-		lazy_percpu_counter_add_noupgrade(&tag->bytes_allocated, -bytes);
+	this_cpu_add(*tag->bytes_allocated, -bytes);
 	ref->ct = NULL;
 }
 
@@ -114,7 +123,7 @@ static inline void alloc_tag_add(union codetag_ref *ref, struct alloc_tag *tag, 
 		return;
 
 	ref->ct = &tag->ct;
-	lazy_percpu_counter_add(&tag->bytes_allocated, bytes);
+	this_cpu_add(*tag->bytes_allocated, bytes);
 }
 
 #else

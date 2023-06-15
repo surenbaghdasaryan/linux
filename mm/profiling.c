@@ -60,7 +60,7 @@ static void alloc_tag_to_text(char *buf, struct codetag *ct)
 	struct alloc_tag *tag = ct_to_alloc_tag(ct);
 	char val[10];
 
-	string_get_size(lazy_percpu_counter_read(&tag->bytes_allocated), 1,
+	string_get_size(alloc_tag_read(tag), 1,
 			STRING_SIZE_BASE2|STRING_SIZE_NOSPACE,
 			val, sizeof(val));
 
@@ -105,7 +105,7 @@ void alloc_tags_show_mem_report(struct seq_buf *s)
 	iter = codetag_get_ct_iter(alloc_tag_cttype);
 	while ((ct = codetag_next_ct(&iter))) {
 		n.tag	= ct;
-		n.bytes = lazy_percpu_counter_read(&ct_to_alloc_tag(ct)->bytes_allocated);
+		n.bytes = alloc_tag_read(ct_to_alloc_tag(ct));
 
 		for (i = 0; i < nr; i++)
 			if (n.bytes > tags[i].bytes)
@@ -129,6 +129,19 @@ void alloc_tags_show_mem_report(struct seq_buf *s)
 	codetag_lock_module_list(alloc_tag_cttype, false);
 }
 
+static void alloc_tag_module_load(struct codetag_type *cttype, struct codetag_module *cmod)
+{
+	struct codetag_iterator iter = codetag_get_ct_iter(cttype);
+	struct codetag *ct;
+
+	for (ct = codetag_next_ct(&iter); ct; ct = codetag_next_ct(&iter)) {
+		if (iter.cmod != cmod)
+			continue;
+
+		ct_to_alloc_tag(ct)->bytes_allocated = alloc_percpu(u64);
+	}
+}
+
 static bool alloc_tag_module_unload(struct codetag_type *cttype, struct codetag_module *cmod)
 {
 	struct codetag_iterator iter = codetag_get_ct_iter(cttype);
@@ -142,11 +155,11 @@ static bool alloc_tag_module_unload(struct codetag_type *cttype, struct codetag_
 			continue;
 
 		tag = ct_to_alloc_tag(ct);
-		bytes = lazy_percpu_counter_read(&tag->bytes_allocated);
+		bytes = alloc_tag_read(tag);
 
 		if (!WARN(bytes, "%s:%u module %s func:%s has %zu allocated at module unload",
 			  ct->filename, ct->lineno, ct->modname, ct->function, bytes))
-			lazy_percpu_counter_exit(&tag->bytes_allocated);
+			free_percpu(tag->bytes_allocated);
 		else
 			module_unused = false;
 	}
@@ -189,6 +202,7 @@ static int __init alloc_tag_init(void)
 	const struct codetag_type_desc desc = {
 		.section	= "alloc_tags",
 		.tag_size	= sizeof(struct alloc_tag),
+		.module_load	= alloc_tag_module_load,
 		.module_unload	= alloc_tag_module_unload,
 	};
 
