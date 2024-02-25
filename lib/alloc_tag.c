@@ -154,9 +154,26 @@ static bool alloc_tag_module_unload(struct codetag_type *cttype,
 	return module_unused;
 }
 
+bool mem_profiling_enabled __meminitdata = true;
+
+static int __init setup_early_mem_profiling(char *str)
+{
+	int res = kstrtobool(str, &mem_profiling_enabled);
+
+	if (!res && mem_profiling_enabled != static_key_enabled(&mem_alloc_profiling_key)) {
+		if (mem_profiling_enabled)
+			static_branch_enable(&mem_alloc_profiling_key);
+		else
+			static_branch_disable(&mem_alloc_profiling_key);
+	}
+
+	return res;
+}
+early_param("sysctl.vm.mem_profiling", setup_early_mem_profiling);
+
 static __init bool need_page_alloc_tagging(void)
 {
-	return true;
+	return mem_profiling_enabled;
 }
 
 static __init void init_page_alloc_tagging(void)
@@ -196,6 +213,8 @@ static int __init alloc_tag_init(void)
 	if (IS_ERR_OR_NULL(alloc_tag_cttype))
 		return PTR_ERR(alloc_tag_cttype);
 
+	if (!mem_profiling_enabled)
+		memory_allocation_profiling_sysctls[0].mode = 0444;
 	register_sysctl_init("vm", memory_allocation_profiling_sysctls);
 	procfs_init();
 
