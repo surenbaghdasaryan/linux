@@ -2866,6 +2866,9 @@ static int early_mod_check(struct load_info *info, int flags)
 	return err;
 }
 
+void *shared_var = NULL;
+EXPORT_SYMBOL_GPL(shared_var);
+
 /*
  * Allocate and load the module: note that size of section 0 is always
  * zero, and we rely on this for optional sections.
@@ -2877,6 +2880,12 @@ static int load_module(struct load_info *info, const char __user *uargs,
 	bool module_allocated = false;
 	long err = 0;
 	char *after_dashes;
+
+	if (shared_var) {
+		pr_info("Freeing shared variable\n");
+		kfree(shared_var);
+		shared_var = NULL;
+	}
 
 	/*
 	 * Do the signature check (if any) first. All that

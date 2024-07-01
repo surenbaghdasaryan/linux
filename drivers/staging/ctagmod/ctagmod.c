@@ -9,6 +9,8 @@ MODULE_LICENSE("GPL");
 static struct page *pg_data;
 static void *slab_data;
 
+extern void *shared_var;
+
 static int __init ctagmod_start(void)
 {
 #ifdef CONFIG_MEM_ALLOC_PROFILING
@@ -41,6 +43,8 @@ static int __init ctagmod_start(void)
 		return -ENOMEM;
 	}
 	kfree(slab_tmp);
+
+	shared_var = kmalloc(10, GFP_KERNEL);
 	printk(KERN_INFO "Slab object is allocated\n");
 #else
 	printk(KERN_INFO "CONFIG_MEM_ALLOC_PROFILING is undefined\n");
