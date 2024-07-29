@@ -758,6 +758,7 @@ config CODE_TAG_TESTING
 	bool "Enable code tag testing"
 	default y
 	select MEM_ALLOC_PROFILING
+	select PGALLOC_TAG_USE_PAGEFLAGS
 	select STAGING
 	help
 	  Enable to test code tagging.
