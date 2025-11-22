@@ -62,4 +62,11 @@ config ANDROID_BINDER_ALLOC_KUNIT_TEST
 	  test-specific freelist, which allows this KUnit module to be loaded
 	  for testing without interfering with a running system.
 
+config ANDROID_WRAPFD
+	bool "Enable support for memory buffer wrapping"
+	depends on MMU
+	help
+	  Wrapfd allows wrapping memory buffer into a new file supporting ioctl
+	  API for file ownership that protects the file from being mapped.
+
 endmenu
