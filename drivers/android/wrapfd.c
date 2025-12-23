@@ -59,6 +59,304 @@ struct wrap_content {
 	struct wrap_content_operations *ops;
 };
 
+/* dmabuf content */
+struct wrap_content_dmabuf {
+	struct wrap_content content;
+	struct dma_buf *dmabuf;
+	struct dma_buf_attachment *attachment;
+	const struct vm_operations_struct *vm_ops;
+	void *vm_private_data;
+	bool writable;
+};
+
+static int dmabuf_content_create_wrap(struct wrap_content *content,
+				      struct wrap_ctx *ctx)
+{
+	struct wrap_content_dmabuf *dmabuf_content;
+
+	dmabuf_content = container_of(content, struct wrap_content_dmabuf,
+				      content);
+	return anon_inode_getfd("[wrapfd]", &wrap_fops, ctx,
+				dmabuf_content->writable ? O_RDWR : O_RDONLY);
+}
+
+static struct miscdevice wrapfd_misc;
+
+static unsigned int init_bio_data(struct sg_table *sgtbl,
+				  size_t offset, size_t len,
+				  struct bio_vec *bvec)
+{
+	struct scatterlist *sg;
+	unsigned int count = 0;
+	size_t end_offs = 0;
+	unsigned int i;
+	size_t sg_len;
+
+	for_each_sg(sgtbl->sgl, sg, sgtbl->nents, i) {
+		end_offs += sg->length;
+		if (end_offs <= offset)
+			continue;
+
+		sg_len = end_offs - offset;
+		bvec[count].bv_page = sg_page(sg);
+		bvec[count].bv_offset = sg->offset + sg->length - sg_len;
+		if (sg_len >= len) {
+			bvec[count++].bv_len = len;
+			break;
+		}
+		bvec[count++].bv_len = sg_len;
+		offset += sg_len;
+		len -= sg_len;
+	}
+
+	return count;
+}
+
+static int dmabuf_content_load(struct wrap_content *content, struct file *file,
+			       unsigned long file_offs, unsigned long buf_offs,
+			       unsigned long len)
+{
+	struct wrap_content_dmabuf *dmabuf_content;
+	struct dma_buf_attachment *attachment;
+	unsigned int bvec_size;
+	struct sg_table *sgtbl;
+	struct bio_vec *bvec;
+	struct iov_iter iter;
+	struct kiocb kiocb;
+	int ret;
+
+	dmabuf_content = container_of(content, struct wrap_content_dmabuf,
+				      content);
+
+	if (file_offs + len > dmabuf_content->dmabuf->size - buf_offs)
+		return -EINVAL;
+
+	attachment = dma_buf_attach(dmabuf_content->dmabuf,
+				    wrapfd_misc.this_device);
+	if (IS_ERR(attachment))
+		return PTR_ERR(attachment);
+
+	sgtbl = dma_buf_map_attachment(attachment, DMA_FROM_DEVICE);
+	if (IS_ERR(sgtbl)) {
+		dma_buf_detach(dmabuf_content->dmabuf, attachment);
+		return PTR_ERR(sgtbl);
+	}
+
+	dma_buf_mangle_sg_table(sgtbl);
+
+	bvec = kvcalloc(sgtbl->nents, sizeof(*bvec), GFP_KERNEL);
+	if (!bvec) {
+		dma_buf_unmap_attachment(attachment, sgtbl, DMA_FROM_DEVICE);
+		dma_buf_detach(dmabuf_content->dmabuf, attachment);
+		return -ENOMEM;
+	}
+
+	bvec_size = init_bio_data(sgtbl, buf_offs, len, bvec);
+	iov_iter_bvec(&iter, ITER_DEST, bvec, bvec_size, len);
+	init_sync_kiocb(&kiocb, file);
+	kiocb.ki_pos = file_offs;
+	kiocb.ki_flags |= IOCB_DIRECT;
+
+	while (kiocb.ki_pos < file_offs + len) {
+		ret = vfs_iocb_iter_read(file, &kiocb, &iter);
+		if (ret <= 0)
+			break;
+	}
+
+	kvfree(bvec);
+	dma_buf_unmap_attachment(attachment, sgtbl, DMA_FROM_DEVICE);
+	dma_buf_detach(dmabuf_content->dmabuf, attachment);
+
+	return ret < 0 ? ret : 0;
+}
+
+static int dmabuf_content_mmap_prepare(struct wrap_content *content,
+				       struct vm_area_struct *vma)
+{
+	struct wrap_content_dmabuf *dmabuf_content;
+
+	dmabuf_content = container_of(content, struct wrap_content_dmabuf,
+				      content);
+	if (vma->vm_flags & VM_MAYWRITE) {
+		if (!dmabuf_content->writable)
+			return -EINVAL;
+	}
+
+	vm_flags_set(vma, VM_SHARED | VM_PFNMAP | VM_DONTEXPAND | VM_DONTDUMP);
+
+	return 0;
+}
+
+static int dmabuf_content_mmap(struct wrap_content *content,
+			       struct vm_area_struct *vma)
+{
+	struct wrap_content_dmabuf *dmabuf_content;
+	const struct vm_operations_struct *orig_ops;
+	void *orig_priv;
+	int ret;
+
+	dmabuf_content = container_of(content, struct wrap_content_dmabuf,
+				      content);
+
+	orig_ops = vma->vm_ops;
+	orig_priv = vma->vm_private_data;
+	ret = dma_buf_mmap(dmabuf_content->dmabuf, vma, 0);
+	if (ret)
+		return ret;
+
+	/*
+	 * dmabuf mapping might replace the original vm_ops and vm_private_data.
+	 * Store the new ones and restore the original ones.
+	 */
+	dmabuf_content->vm_ops = vma->vm_ops;
+	dmabuf_content->vm_private_data = vma->vm_private_data;
+	vma->vm_ops = orig_ops;
+	vma->vm_private_data = orig_priv;
+
+	return 0;
+}
+
+static vm_fault_t dmabuf_content_fault(struct wrap_content *content,
+				       struct vm_fault *vmf)
+{
+	struct wrap_content_dmabuf *dmabuf_content;
+	void *orig_priv;
+	vm_fault_t ret;
+
+	dmabuf_content = container_of(content, struct wrap_content_dmabuf,
+				      content);
+	if (!dmabuf_content->vm_ops || !dmabuf_content->vm_ops->fault)
+		return VM_FAULT_SIGBUS;
+
+	orig_priv = vmf->vma->vm_private_data;
+	vmf->vma->vm_private_data = dmabuf_content->vm_private_data;
+	ret = dmabuf_content->vm_ops->fault(vmf);
+	vmf->vma->vm_private_data = orig_priv;
+
+	return ret;
+}
+
+static void dmabuf_content_free(struct wrap_content *content)
+{
+	struct wrap_content_dmabuf *dmabuf_content;
+
+	dmabuf_content = container_of(content, struct wrap_content_dmabuf,
+				      content);
+	if (dmabuf_content->dmabuf)
+		dma_buf_put(dmabuf_content->dmabuf);
+	kfree(dmabuf_content);
+}
+
+static struct wrap_content*
+dmabuf_content_make_writable(struct wrap_content* content, bool writable)
+{
+	struct wrap_content_dmabuf *dmabuf_content;
+
+	dmabuf_content = container_of(content, struct wrap_content_dmabuf,
+				      content);
+	dmabuf_content->writable = writable;
+
+	return content;
+}
+
+static bool dmabuf_content_is_writable(struct wrap_content* content)
+{
+	struct wrap_content_dmabuf *dmabuf_content;
+
+	dmabuf_content = container_of(content, struct wrap_content_dmabuf,
+				      content);
+
+	return dmabuf_content->writable;
+}
+
+
+static void dmabuf_content_show_fdinfo(struct wrap_content *content,
+				       char *buf, size_t buf_size)
+{
+	struct wrap_content_dmabuf *dmabuf_content;
+
+	dmabuf_content = container_of(content, struct wrap_content_dmabuf,
+				      content);
+	sprintf(buf, "type:\tdmabuf");
+}
+
+static struct sg_table *dmabuf_content_get_sgtable(struct wrap_content *content,
+						   struct device *dev)
+{
+	struct wrap_content_dmabuf *dmabuf_content;
+	struct dma_buf_attachment *attachment;
+	struct sg_table *sgtbl;
+
+	dmabuf_content = container_of(content, struct wrap_content_dmabuf,
+				      content);
+	if (dmabuf_content->attachment)
+		return ERR_PTR(-EBUSY);
+
+	attachment = dma_buf_attach(dmabuf_content->dmabuf, dev);
+	if (IS_ERR(attachment))
+		return ERR_PTR(PTR_ERR(attachment));
+
+	sgtbl = dma_buf_map_attachment(attachment, DMA_BIDIRECTIONAL);
+	if (IS_ERR(sgtbl)) {
+		dma_buf_detach(dmabuf_content->dmabuf, attachment);
+		return sgtbl;
+	}
+	dma_buf_mangle_sg_table(sgtbl);
+	dmabuf_content->attachment = attachment;
+
+	return sgtbl;
+}
+
+static void dmabuf_content_put_sgtable(struct wrap_content *content,
+				       struct sg_table *sgtbl)
+{
+	struct wrap_content_dmabuf *dmabuf_content;
+
+	dmabuf_content = container_of(content, struct wrap_content_dmabuf,
+				      content);
+	if (!dmabuf_content->attachment)
+		return;
+
+	dma_buf_unmap_attachment(dmabuf_content->attachment, sgtbl,
+				 DMA_BIDIRECTIONAL);
+	dma_buf_detach(dmabuf_content->dmabuf, dmabuf_content->attachment);
+	dmabuf_content->attachment = NULL;
+}
+
+static struct wrap_content_operations dmabuf_content_ops = {
+	.create_wrap		= dmabuf_content_create_wrap,
+	.load			= dmabuf_content_load,
+	.mmap_prepare		= dmabuf_content_mmap_prepare,
+	.mmap			= dmabuf_content_mmap,
+	.fault			= dmabuf_content_fault,
+	.make_writable		= dmabuf_content_make_writable,
+	.is_writable		= dmabuf_content_is_writable,
+	.free			= dmabuf_content_free,
+	.show_fdinfo		= dmabuf_content_show_fdinfo,
+	.get_sgtable		= dmabuf_content_get_sgtable,
+	.put_sgtable		= dmabuf_content_put_sgtable,
+};
+
+static struct wrap_content *alloc_dmabuf_content(struct dma_buf *dmabuf,
+						 bool writable)
+{
+	struct wrap_content_dmabuf *dmabuf_content;
+
+	dmabuf_content = kmalloc(sizeof(*dmabuf_content), GFP_KERNEL);
+	if (!dmabuf_content)
+		return NULL;
+
+	get_dma_buf(dmabuf);
+	dmabuf_content->dmabuf = dmabuf;
+	dmabuf_content->attachment = NULL;
+	dmabuf_content->vm_ops = NULL;
+	dmabuf_content->vm_private_data = NULL;
+	dmabuf_content->writable = writable;
+	dmabuf_content->content.ops = &dmabuf_content_ops;
+
+	return &dmabuf_content->content;
+}
+
 /* Generic wrapfd */
 struct wrap_owner
 {
@@ -577,8 +875,18 @@ static const struct file_operations wrap_fops = {
 
 static struct wrap_content *create_content_for(int fd, unsigned long prot)
 {
-	/* TODO */
-	return ERR_PTR(-EINVAL);
+	struct wrap_content *content = ERR_PTR(-EINVAL);
+	struct dma_buf *dmabuf;
+
+	dmabuf = dma_buf_get(fd);
+	if (!IS_ERR(dmabuf)) {
+		bool writable = !!(prot & PROT_WRITE);
+
+		content = alloc_dmabuf_content(dmabuf, writable);
+		dma_buf_put(dmabuf);
+	}
+
+	return content;
 }
 
 static int wrap_file(struct wrap_ctx *ctx,
