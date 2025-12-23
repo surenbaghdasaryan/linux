@@ -67,6 +67,7 @@ FIXTURE(wrapfd_tests)
 	bool verbose;
 	size_t size;
 	int dev_fd;
+	int test_dev_fd;
 	int fd;
 };
 
@@ -82,6 +83,9 @@ FIXTURE_SETUP(wrapfd_tests)
 
 	self->dev_fd = open("/dev/wrapfd", O_RDONLY);
 	ASSERT_TRUE(self->dev_fd >= 0);
+
+	self->test_dev_fd = open("/dev/wrapfd_test", O_RDONLY);
+	ASSERT_TRUE(self->test_dev_fd >= 0);
 
 	/* Prepare random content buffer */
 	self->content = malloc(self->size);
@@ -105,6 +109,7 @@ FIXTURE_SETUP(wrapfd_tests)
 FIXTURE_TEARDOWN(wrapfd_tests)
 {
 	close(self->fd);
+	close(self->test_dev_fd);
 	close(self->dev_fd);
 }
 
@@ -244,7 +249,35 @@ static void test_wrap_rdwr(struct __test_metadata *_metadata,
 static void test_kernel_api(struct __test_metadata *_metadata,
 			    FIXTURE_DATA(wrapfd_tests) *self, int fd)
 {
-	/* TODO */
+	int wrapfd;
+	int testfd;
+
+	wrapfd = wrapfd_wrap(self->dev_fd, fd, PROT_READ | PROT_WRITE);
+	ASSERT_TRUE(wrapfd >= 0);
+
+	/* Clear buffer content */
+	ASSERT_EQ(wrapfd_get(wrapfd), 0);
+	clear_content(_metadata, self, wrapfd);
+	ASSERT_EQ(wrapfd_put(wrapfd), 0);
+
+	/* Map via the test driver and check the content */
+	testfd = wrapfd_test_get(self->test_dev_fd, wrapfd, O_RDWR);
+	ASSERT_TRUE(testfd >= 0);
+	ASSERT_NE(cmp_content(_metadata, self, testfd), 0);
+	close(testfd);
+
+	/* Load buffer content from the file */
+	ASSERT_EQ(wrapfd_get(wrapfd), 0);
+	ASSERT_EQ(wrapfd_load(wrapfd, self->fd, 0, 0, self->size), 0);
+	ASSERT_EQ(wrapfd_put(wrapfd), 0);
+
+	/* Map via the test driver and check the content */
+	testfd = wrapfd_test_get(self->test_dev_fd, wrapfd, O_RDWR);
+	ASSERT_TRUE(testfd >= 0);
+	ASSERT_EQ(cmp_content(_metadata, self, testfd), 0);
+	close(testfd);
+
+	close(wrapfd);
 }
 
 static void run_tests(struct __test_metadata *_metadata,
