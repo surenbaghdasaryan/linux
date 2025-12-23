@@ -59,6 +59,505 @@ struct wrap_content {
 	struct wrap_content_operations *ops;
 };
 
+/* Folios content */
+struct wrap_content_folios {
+	struct wrap_content content;
+	struct folio **folios;
+	size_t nr_pages;
+	bool writable;
+};
+
+static int folios_content_create_wrap(struct wrap_content *content,
+				      struct wrap_ctx *ctx)
+{
+	struct wrap_content_folios *folios_content;
+
+	folios_content = container_of(content, struct wrap_content_folios,
+				      content);
+	return anon_inode_getfd("[wrapfd]", &wrap_fops, ctx,
+				folios_content->writable ? O_RDWR : O_RDONLY);
+}
+
+static int folios_content_load(struct wrap_content *content, struct file *file,
+			       unsigned long file_offs, unsigned long buf_offs,
+			       unsigned long len)
+{
+	return -ENOMEM;
+}
+
+static int folios_content_mmap_prepare(struct wrap_content *content,
+				       struct vm_area_struct *vma)
+{
+	if (vma->vm_flags & VM_MAYWRITE) {
+		struct wrap_content_folios *folios_content;
+
+		folios_content = container_of(content,
+					      struct wrap_content_folios,
+					      content);
+		if (!folios_content->writable)
+			return -EINVAL;
+	}
+
+	vm_flags_set(vma, VM_SHARED | VM_PFNMAP | VM_DONTEXPAND | VM_DONTDUMP);
+
+	return 0;
+}
+
+static int folios_content_mmap(struct wrap_content *content,
+			       struct vm_area_struct *vma)
+{
+	return 0;
+}
+
+static vm_fault_t folios_content_fault(struct wrap_content *content,
+				       struct vm_fault *vmf)
+{
+	struct wrap_content_folios *folios_content;
+	struct folio *folio;
+	size_t i, page_offs;
+
+	folios_content = container_of(content, struct wrap_content_folios,
+				      content);
+
+	if (vmf->pgoff >= folios_content->nr_pages)
+		return VM_FAULT_SIGBUS;
+
+	/* Find out the page number within the folio */
+	page_offs = 0;
+	i = vmf->pgoff;
+	folio = folios_content->folios[i];
+	while (i > 0) {
+		i--;
+		if (folio != folios_content->folios[i])
+			break;
+		page_offs++;
+	}
+
+	return vmf_insert_pfn(vmf->vma, vmf->address,
+			      page_to_pfn(folio_page(folio, page_offs)));
+}
+
+static void folios_content_free(struct wrap_content *content)
+{
+	struct wrap_content_folios *folios_content;
+
+	folios_content = container_of(content, struct wrap_content_folios,
+				      content);
+	if (folios_content->folios) {
+		for (size_t i = 0; i < folios_content->nr_pages; ) {
+			struct folio *folio = folios_content->folios[i];
+
+			i += folio_nr_pages(folio);
+			folio_put(folio);
+		}
+		kfree(folios_content->folios);
+	}
+	kfree(folios_content);
+}
+
+static struct wrap_content*
+folios_content_make_writable(struct wrap_content* content, bool writable)
+{
+	struct wrap_content_folios *folios_content;
+
+	folios_content = container_of(content, struct wrap_content_folios,
+				      content);
+	folios_content->writable = writable;
+
+	return content;
+}
+
+static bool folios_content_is_writable(struct wrap_content* content)
+{
+	struct wrap_content_folios *folios_content;
+
+	folios_content = container_of(content, struct wrap_content_folios,
+				      content);
+
+	return folios_content->writable;
+}
+
+
+static void folios_content_show_fdinfo(struct wrap_content *content,
+				       char *buf, size_t buf_size)
+{
+	struct wrap_content_folios *folios_content;
+
+	folios_content = container_of(content, struct wrap_content_folios,
+				      content);
+	sprintf(buf, "type:\tanon\nsize:\t%lu",
+		folios_content->nr_pages << PAGE_SHIFT);
+}
+
+static struct sg_table *folios_content_get_sgtable(struct wrap_content *content,
+						   struct device *dev)
+{
+	struct wrap_content_folios *folios_content;
+	struct scatterlist *new_sg;
+	struct sg_table *table;
+	size_t offset = 0;
+	int ret;
+
+	folios_content = container_of(content, struct wrap_content_folios,
+				      content);
+
+	table = kmalloc(sizeof(*table), GFP_KERNEL);
+	if (!table)
+		return ERR_PTR(-ENOMEM);
+
+	ret = sg_alloc_table(table, folios_content->nr_pages, GFP_KERNEL);
+	if (ret) {
+		kfree(table);
+		return ERR_PTR(ret);
+	}
+
+	new_sg = table->sgl;
+	for (size_t i = 0; i < folios_content->nr_pages; i++) {
+		struct folio *folio = folios_content->folios[i];
+
+		folio_get(folio);
+		sg_set_folio(new_sg, folio, folio_size(folio), offset);
+		offset += folio_size(folio);
+		new_sg = sg_next(new_sg);
+	}
+
+	return table;
+}
+
+static void free_folio_table(struct sg_table *table)
+{
+	struct scatterlist *sg;
+	int i = 0;
+
+	for_each_sgtable_sg(table, sg, i)
+		folio_put(page_folio(sg_page(sg)));
+	sg_free_table(table);
+}
+
+static void folios_content_put_sgtable(struct wrap_content *content,
+				       struct sg_table *sgtbl)
+{
+	struct wrap_content_folios *folios_content;
+
+	folios_content = container_of(content, struct wrap_content_folios,
+				      content);
+	if (!sgtbl)
+		return;
+
+	free_folio_table(sgtbl);
+	kfree(sgtbl);
+}
+
+static struct wrap_content_operations folios_content_ops = {
+	.create_wrap		= folios_content_create_wrap,
+	.load			= folios_content_load,
+	.mmap_prepare		= folios_content_mmap_prepare,
+	.mmap			= folios_content_mmap,
+	.fault			= folios_content_fault,
+	.make_writable		= folios_content_make_writable,
+	.is_writable		= folios_content_is_writable,
+	.free			= folios_content_free,
+	.show_fdinfo		= folios_content_show_fdinfo,
+	.get_sgtable		= folios_content_get_sgtable,
+	.put_sgtable		= folios_content_put_sgtable,
+};
+
+static struct wrap_content *alloc_folios_content(struct file *file)
+{
+	struct address_space *mapping = file->f_mapping;
+	struct wrap_content_folios *folios_content;
+	unsigned long pg_count, nr_pages = 0;
+	XA_STATE(xas, &mapping->i_pages, 0);
+	unsigned long addr, size;
+	struct folio **folios;
+	struct folio *folio;
+
+	if (mapping->a_ops->free_folio)
+		return NULL;
+
+	inode_lock(file->f_inode);
+
+	/* Fault-in and mlock the content of the file. */
+	size = i_size_read(file->f_inode);
+	addr = vm_mmap(file, 0, size, PROT_READ, MAP_PRIVATE | MAP_LOCKED, 0);
+	if (IS_ERR_VALUE(addr))
+		goto out_unlock_inode;
+
+	folios_content = kmalloc(sizeof(*folios_content), GFP_KERNEL);
+	if (!folios_content)
+		goto out_unmap;
+
+	/* Copy file content into folios_content->folios. */
+	pg_count = mapping->nrpages;
+	folios = kmalloc(sizeof(struct folio*) * pg_count, GFP_KERNEL);
+	if (!folios)
+		goto out_free_content;
+
+	filemap_invalidate_lock(mapping);
+	if (unlikely(filemap_write_and_wait(mapping)))
+		goto out_unlock_filemap;
+
+	rcu_read_lock();
+	xas_for_each(&xas, folio, ULONG_MAX) {
+		if (xas_retry(&xas, folio))
+			continue;
+		if (xa_is_value(folio))
+			continue;
+
+		folio_get(folio);
+		for (size_t i = 0; i < folio_nr_pages(folio); i++)
+			folios[nr_pages++] = folio;
+
+		if (nr_pages >= pg_count)
+			break;
+	}
+	rcu_read_unlock();
+
+	BUG_ON(nr_pages < pg_count);
+
+	folios_content->folios = folios;
+	folios_content->nr_pages = nr_pages;
+	folios_content->writable = true;
+	folios_content->content.ops = &folios_content_ops;
+
+	/* We have folio references, we can let go of the file mapping. */
+	truncate_inode_pages_range(mapping, 0, ULONG_MAX);
+	filemap_invalidate_unlock(mapping);
+
+	vm_munmap(addr, size);
+
+	inode_unlock(file->f_inode);
+
+	return &folios_content->content;
+
+out_unlock_filemap:
+	filemap_invalidate_unlock(mapping);
+	kfree(folios);
+out_free_content:
+	kfree(folios_content);
+out_unmap:
+	vm_munmap(addr, size);
+out_unlock_inode:
+	inode_unlock(file->f_inode);
+
+	return NULL;
+}
+
+/* Read-only file content */
+struct wrap_content_rd_file {
+	struct wrap_content content;
+	struct file *file;
+	unsigned long addr;
+	unsigned long size;
+};
+
+static int rd_file_content_create_wrap(struct wrap_content *content,
+				       struct wrap_ctx *ctx)
+{
+	struct wrap_content_rd_file *rd_file_content;
+	struct file *new_file;
+	struct file *file;
+	int wrapfd;
+
+	rd_file_content = container_of(content, struct wrap_content_rd_file,
+				       content);
+	file = rd_file_content->file;
+
+	new_file = alloc_file_clone(file, file->f_flags, &wrap_fops);
+	if (IS_ERR(new_file))
+		return PTR_ERR(new_file);
+
+	wrapfd = get_unused_fd_flags(file->f_flags);
+	if (wrapfd < 0) {
+		fput(new_file);
+		return wrapfd;
+	}
+
+	new_file->private_data = ctx;
+	fd_install(wrapfd, new_file);
+
+	return wrapfd;
+}
+
+static int rd_file_content_load(struct wrap_content *content, struct file *file,
+				unsigned long file_offs, unsigned long buf_offs,
+				unsigned long len)
+{
+	return -ENOMEM;
+}
+
+static int rd_file_content_mmap_prepare(struct wrap_content *content,
+					struct vm_area_struct *vma)
+{
+	struct wrap_content_rd_file *rd_file_content;
+
+	/* Read-only mappings only */
+	if (vma->vm_flags & VM_MAYWRITE)
+		return -EINVAL;
+
+	rd_file_content = container_of(content, struct wrap_content_rd_file,
+				       content);
+	/* Replace vm_file with the underlying one. */
+	fput(vma->vm_file);
+	vma->vm_file = get_file(rd_file_content->file);
+
+	return 0;
+}
+
+static int rd_file_content_mmap(struct wrap_content *content,
+				struct vm_area_struct *vma)
+{
+	struct wrap_content_rd_file *rd_file_content;
+
+
+	rd_file_content = container_of(content, struct wrap_content_rd_file,
+				       content);
+	if (!vma->vm_file->f_op->mmap)
+		return 0;
+
+	return vma->vm_file->f_op->mmap(vma->vm_file, vma);
+}
+
+static vm_fault_t rd_file_content_fault(struct wrap_content *content,
+					struct vm_fault *vmf)
+{
+	return filemap_fault(vmf);
+}
+
+static void rd_file_content_free(struct wrap_content *content)
+{
+	struct wrap_content_rd_file *rd_file_content;
+
+	rd_file_content = container_of(content, struct wrap_content_rd_file,
+				       content);
+	/* If exit_mm() already happened all the areas are already freed. */
+	if (current->mm)
+		vm_munmap(rd_file_content->addr, rd_file_content->size);
+	fput(rd_file_content->file);
+	kfree(rd_file_content);
+}
+
+static struct wrap_content*
+rd_file_content_make_writable(struct wrap_content* content, bool writable)
+{
+	struct wrap_content_rd_file *rd_file_content;
+
+	if (!writable)
+		return content; /* The content is already read-only. */
+
+	rd_file_content = container_of(content, struct wrap_content_rd_file,
+				       content);
+
+	return alloc_folios_content(rd_file_content->file);
+}
+
+static bool rd_file_content_is_writable(struct wrap_content* content)
+{
+	return false;
+}
+
+static void rd_file_content_show_fdinfo(struct wrap_content *content,
+					char *buf, size_t buf_size)
+{
+	struct wrap_content_rd_file *rd_file_content;
+
+	rd_file_content = container_of(content, struct wrap_content_rd_file,
+				       content);
+	sprintf(buf, "type:\tfile\nsrc:\t%ld\nsize:\t%lu",
+		rd_file_content->file->f_inode->i_ino, rd_file_content->size);
+}
+
+static struct sg_table *rd_file_content_get_sgtable(struct wrap_content *content,
+						    struct device *dev)
+{
+	struct wrap_content_rd_file *rd_file_content;
+	struct address_space *mapping;
+	struct sg_table *table;
+	int ret;
+
+	rd_file_content = container_of(content, struct wrap_content_rd_file,
+				       content);
+	table = kmalloc(sizeof(*table), GFP_KERNEL);
+	if (!table)
+		return ERR_PTR(-ENOMEM);
+
+	mapping = rd_file_content->file->f_mapping;
+	ret = sg_alloc_table(table, mapping->nrpages, GFP_KERNEL);
+	if (!ret) {
+		XA_STATE(xas, &mapping->i_pages, 0);
+		struct folio *folio;
+
+		rcu_read_lock();
+		xas_for_each(&xas, folio, ULONG_MAX) {
+			if (xas_retry(&xas, folio))
+				continue;
+			if (xa_is_value(folio))
+				continue;
+
+			folio_get(folio);
+			sg_set_folio(table->sgl, folio, folio_size(folio),
+				     folio->index * PAGE_SIZE);
+		}
+		rcu_read_unlock();
+	}
+
+	return table;
+}
+
+static void rd_file_content_put_sgtable(struct wrap_content *content,
+					struct sg_table *sgtbl)
+{
+	struct wrap_content_rd_file *rd_file_content;
+
+	rd_file_content = container_of(content, struct wrap_content_rd_file,
+				       content);
+	if (!sgtbl)
+		return;
+
+	free_folio_table(sgtbl);
+	kfree(sgtbl);
+}
+
+static struct wrap_content_operations rd_file_content_ops = {
+	.create_wrap		= rd_file_content_create_wrap,
+	.load			= rd_file_content_load,
+	.mmap_prepare		= rd_file_content_mmap_prepare,
+	.mmap			= rd_file_content_mmap,
+	.fault			= rd_file_content_fault,
+	.free			= rd_file_content_free,
+	.make_writable		= rd_file_content_make_writable,
+	.is_writable		= rd_file_content_is_writable,
+	.show_fdinfo		= rd_file_content_show_fdinfo,
+	.get_sgtable		= rd_file_content_get_sgtable,
+	.put_sgtable		= rd_file_content_put_sgtable,
+};
+
+static struct wrap_content *alloc_rd_file_content(struct file *file)
+{
+	struct wrap_content_rd_file *rd_file_content;
+	unsigned long addr;
+	unsigned long size;
+
+	rd_file_content = kmalloc(sizeof(*rd_file_content), GFP_KERNEL);
+	if (!rd_file_content)
+		return NULL;
+
+	/* Fault in and mlock the content of the file */
+	size = i_size_read(file->f_inode);
+	addr = vm_mmap(file, 0, size, PROT_READ, MAP_PRIVATE | MAP_LOCKED, 0);
+	if (IS_ERR_VALUE(addr)) {
+		kfree(rd_file_content);
+		return NULL;
+	}
+
+	rd_file_content->content.ops = &rd_file_content_ops;
+	rd_file_content->file = get_file(file);
+	rd_file_content->addr = addr;
+	rd_file_content->size = size;
+
+	return &rd_file_content->content;
+}
+
 /* dmabuf content */
 struct wrap_content_dmabuf {
 	struct wrap_content content;
@@ -884,6 +1383,26 @@ static struct wrap_content *create_content_for(int fd, unsigned long prot)
 
 		content = alloc_dmabuf_content(dmabuf, writable);
 		dma_buf_put(dmabuf);
+	} else {
+		struct file *file;
+
+		if (PTR_ERR(dmabuf) != -EINVAL)
+			return ERR_PTR(PTR_ERR(dmabuf));
+
+		file = fget(fd);
+		if (!file)
+			return ERR_PTR(-EBADF);
+
+		/* File should be read-only */
+		if ((file->f_flags & O_ACCMODE) != O_RDONLY) {
+			fput(file);
+			return ERR_PTR(-EPERM);
+		}
+
+		content = (prot & PROT_WRITE) ?
+				alloc_folios_content(file) :
+				alloc_rd_file_content(file);
+		fput(file);
 	}
 
 	return content;
